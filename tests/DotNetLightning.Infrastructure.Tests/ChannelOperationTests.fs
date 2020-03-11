@@ -212,6 +212,31 @@ type internal ActorCreator =
         return actors
     }
     
+    static member sendGeewalletPayment alice bob = async {
+        let bobNodeId = bob.CM.KeysRepository.GetNodeSecret().PubKey |> NodeId
+        let aliceNodeId = alice.CM.KeysRepository.GetNodeSecret().PubKey |> NodeId
+
+        do! Async.Sleep 1000
+        Console.WriteLine("testing geewallet payment")
+
+
+        let aliceToBobAmount = 1000L |> LNMoney.MilliSatoshis
+        let geewalletPaymentCmd = {
+            Amount = aliceToBobAmount
+        }
+
+        // Send geewallet payment from alice to bob
+        let bobAcceptedGeewalletPaymentTask =
+            bob.EventAggregator.AwaitChannelEvent(function WeAcceptedGeewalletPayment _ -> Some () | _ -> None)
+        do!
+            alice.CM.AcceptCommandAsync({
+                NodeId = bobNodeId
+                ChannelCommand = ChannelCommand.GeewalletPayment geewalletPaymentCmd
+            }).AsTask() |> Async.AwaitTask
+
+        let! r = bobAcceptedGeewalletPaymentTask
+        Expect.isSome r "timeout waiting for bob to accept geewallet payment"
+    }
     
 [<Tests>]
 let tests =
@@ -312,8 +337,164 @@ let tests =
             
             return ()
         }
-        
-        ptestAsync "Normal channel operation" { 
+
+        testAsync "Send geewallet payment" {
+            do! Async.Sleep 1000
+
+            Console.WriteLine("starting geewallet payment test")
+            let alice = ActorCreator.getAlice()
+            let bob = ActorCreator.getBob()
+            let! actors = ActorCreator.initiateOpenedChannel(alice, bob)
+            let bobNodeId = bob.CM.KeysRepository.GetNodeSecret().PubKey |> NodeId
+            let aliceNodeId = alice.CM.KeysRepository.GetNodeSecret().PubKey |> NodeId
+
+            (*
+            do! Async.Sleep 1000
+            Console.WriteLine("testing an htlc from alice to bob")
+
+            let paymentPreImages =
+                List.init 9 (fun i ->
+                    PaymentPreimage.Create([|for _ in 0..31 -> (uint8 i)|])
+                )
+
+            let baseAddHTLCCmd = { CMDAddHTLC.Expiry = BlockHeight (130u)
+                                   AmountMSat = LNMoney.Zero
+                                   PaymentHash = paymentPreImages.[0].Hash
+                                   Onion = OnionPacket.LastPacket
+                                   Upstream = None
+                                   Origin = None
+                                   CurrentHeight = BlockHeight(101u) }
+
+            // send update_add_htlc from alice to bob
+            let aliceToBobAmount = LNMoney.MilliSatoshis(1000L)
+            let addHtlcCmd = { baseAddHTLCCmd with AmountMSat = aliceToBobAmount }
+            let bobAcceptedAddHTLCTask =
+                bob.EventAggregator.AwaitChannelEvent(function WeAcceptedUpdateAddHTLC _ -> Some () | _ -> None)
+
+            do! alice.CM.AcceptCommandAsync({ NodeId = bobNodeId; ChannelCommand = ChannelCommand.AddHTLC addHtlcCmd }).AsTask() |> Async.AwaitTask
+            let! r = bobAcceptedAddHTLCTask
+            Expect.isSome r "timeout waiting for bob to accept htlc"
+
+
+            do! Async.Sleep 1000
+            Console.WriteLine("alice signs her commit for the htlc")
+
+            let aliceAcceptedSign =
+                alice.EventAggregator.AwaitChannelEvent(function WeAcceptedCMDSign (_, commitments) -> Some commitments | _ -> None)
+            let aliceAcceptedRevokeAndAck =
+                alice.EventAggregator.AwaitChannelEvent(function WeAcceptedRevokeAndACK commitments -> Some commitments | _ -> None)
+            let bobAcceptedSign =
+                bob.EventAggregator.AwaitChannelEvent(function WeAcceptedCommitmentSigned (revokeAndAck, commitments) -> Some (revokeAndAck, commitments) | _ -> None)
+            do! alice.CM.AcceptCommandAsync({ NodeId = bobNodeId; ChannelCommand = SignCommitment }).AsTask() |> Async.AwaitTask
+            let! r = aliceAcceptedSign
+            Expect.isSome r "timeout waiting for alice to accept sign command"
+            let! r = bobAcceptedSign
+            Expect.isSome r "timeout waiting for bob to accept commitment signature"
+            let revokeAndAck, bobCommitments = r.Value
+            let! r = aliceAcceptedRevokeAndAck
+            Expect.isSome r "timeout waiting for alice to accept revoke_and_ack"
+            let aliceCommitments = r.Value
+
+
+            do! Async.Sleep 1000
+            Console.WriteLine(sprintf "alice now has: %s sat" (aliceCommitments.LocalCommit.Spec.ToLocal.ToString()))
+
+            let aliceExpectedAmount =
+                LNMoney.Satoshis(fundingSatoshis.Satoshi) - pushMsat - aliceToBobAmount// + bobToAliceAmount
+            let bobExpectedAmount =
+                pushMsat + aliceToBobAmount
+
+            Expect.equal
+                aliceExpectedAmount
+                aliceCommitments.LocalCommit.Spec.ToLocal
+                ""
+            Expect.equal
+                bobExpectedAmount
+                aliceCommitments.LocalCommit.Spec.ToRemote
+                ""
+            Expect.equal
+                bobExpectedAmount
+                aliceCommitments.RemoteCommit.Spec.ToLocal
+                ""
+            Expect.equal
+                aliceExpectedAmount
+                aliceCommitments.RemoteCommit.Spec.ToRemote
+                ""
+
+            Expect.equal
+                bobExpectedAmount
+                bobCommitments.LocalCommit.Spec.ToLocal
+                ""
+            Expect.equal
+                aliceExpectedAmount
+                bobCommitments.LocalCommit.Spec.ToRemote
+                ""
+            Expect.equal
+                aliceExpectedAmount
+                bobCommitments.RemoteCommit.Spec.ToLocal
+                ""
+            Expect.equal
+                bobExpectedAmount
+                bobCommitments.RemoteCommit.Spec.ToRemote
+                ""
+            *)
+
+            do! ActorCreator.sendGeewalletPayment alice bob
+
+            do! Async.Sleep 1000
+            Console.WriteLine("alice signs her commit")
+
+            let aliceAcceptedSign =
+                alice.EventAggregator.AwaitChannelEvent(function WeAcceptedCMDSign (_, commitments) -> Some commitments | _ -> None)
+            let bobAcceptedSign =
+                bob.EventAggregator.AwaitChannelEvent(function WeAcceptedCommitmentSigned (revokeAndAck, commitments) -> Some (revokeAndAck, commitments) | _ -> None)
+            do! alice.CM.AcceptCommandAsync({ NodeId = bobNodeId; ChannelCommand = SignCommitment }).AsTask() |> Async.AwaitTask
+            let! r = aliceAcceptedSign
+            Expect.isSome r "timeout waiting for alice to accept sign command"
+            let! r = bobAcceptedSign
+            Expect.isSome r "timeout waiting for bob to accept commitment signature"
+
+            do! Async.Sleep 1000
+            Console.WriteLine("finishing geewallet payment test")
+        }
+
+        ptestAsync "Send geewallet payment with revoke_and_ack" {
+            do! Async.Sleep 1000
+
+            Console.WriteLine("starting geewallet payment test")
+            let alice = ActorCreator.getAlice()
+            let bob = ActorCreator.getBob()
+            let! actors = ActorCreator.initiateOpenedChannel(alice, bob)
+            let bobNodeId = bob.CM.KeysRepository.GetNodeSecret().PubKey |> NodeId
+            let aliceNodeId = alice.CM.KeysRepository.GetNodeSecret().PubKey |> NodeId
+
+            do! ActorCreator.sendGeewalletPayment alice bob
+
+            do! Async.Sleep 1000
+            Console.WriteLine("alice signs her commit")
+
+            let aliceAcceptedSign =
+                alice.EventAggregator.AwaitChannelEvent(function WeAcceptedCMDSign (_, commitments) -> Some commitments | _ -> None)
+            let aliceAcceptedRevokeAndAck =
+                alice.EventAggregator.AwaitChannelEvent(function WeAcceptedRevokeAndACK commitments -> Some commitments | _ -> None)
+            let bobAcceptedSign =
+                bob.EventAggregator.AwaitChannelEvent(function WeAcceptedCommitmentSigned (revokeAndAck, commitments) -> Some (revokeAndAck, commitments) | _ -> None)
+            do! alice.CM.AcceptCommandAsync({ NodeId = bobNodeId; ChannelCommand = SignCommitment }).AsTask() |> Async.AwaitTask
+            let! r = aliceAcceptedSign
+            Expect.isSome r "timeout waiting for alice to accept sign command"
+            let! r = bobAcceptedSign
+            Expect.isSome r "timeout waiting for bob to accept commitment signature"
+            let revokeAndAck, bobCommitments = r.Value
+            Expect.isSome r "timeout waiting for alice to accept revoke_and_ack"
+            let! r = aliceAcceptedRevokeAndAck
+            let aliceCommitments = r.Value
+
+            do! Async.Sleep 1000
+            Console.WriteLine(sprintf "alice now has: %s sat" (aliceCommitments.LocalCommit.Spec.ToLocal.ToString()))
+            Console.WriteLine("finishing geewallet payment with revoke_and_ack test")
+        }
+
+        ptestAsync "Normal channel operation" {
             let alice = ActorCreator.getAlice()
             let bob = ActorCreator.getBob()
             let! actors = ActorCreator.initiateOpenedChannel(alice, bob)

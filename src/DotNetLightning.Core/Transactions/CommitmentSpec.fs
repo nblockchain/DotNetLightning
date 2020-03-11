@@ -52,6 +52,11 @@ type CommitmentSpec = {
         member this.TotalFunds =
             this.ToLocal + this.ToRemote + (this.HTLCs |> Seq.sumBy(fun h -> h.Value.Add.AmountMSat))
 
+        member internal this.GeewalletPayment(direction: Direction, update: GeewalletPayment) =
+            match direction with
+            | Out -> { this with ToLocal = this.ToLocal - update.Amount; ToRemote = this.ToRemote + update.Amount }
+            | In ->  { this with ToLocal = this.ToLocal + update.Amount; ToRemote = this.ToRemote - update.Amount }
+
         member internal this.AddHTLC(direction: Direction, update: UpdateAddHTLC) =
             let htlc = { DirectedHTLC.Direction = direction; Add = update }
             match direction with
@@ -81,6 +86,24 @@ type CommitmentSpec = {
                 UnknownHTLC htlcId |> Error
 
         member internal this.Reduce(localChanges: #IUpdateMsg list, remoteChanges: #IUpdateMsg list) =
+            let specGeewalletPaymentLocal =
+                localChanges
+                |> List.fold(fun (acc: CommitmentSpec) updateMsg ->
+                        match box updateMsg with
+                        | :? GeewalletPayment as u -> acc.GeewalletPayment(Out, u)
+                        | _ -> acc
+                    )
+                    this
+
+            let specGeewalletPaymentRemote =
+                remoteChanges
+                |> List.fold(fun (acc: CommitmentSpec) updateMsg ->
+                        match box updateMsg with
+                        | :? GeewalletPayment as u -> acc.GeewalletPayment(In, u)
+                        | _ -> acc
+                    )
+                    specGeewalletPaymentLocal
+
             let spec1 =
                 localChanges
                 |> List.fold(fun (acc: CommitmentSpec) updateMsg ->
@@ -88,7 +111,7 @@ type CommitmentSpec = {
                         | :? UpdateAddHTLC as u -> acc.AddHTLC(Out, u)
                         | _ -> acc
                     )
-                    this
+                    specGeewalletPaymentRemote
 
             let spec2 =
                 remoteChanges

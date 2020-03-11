@@ -190,15 +190,19 @@ type PeerManager(eventAggregator: IEventAggregator,
                 | WeSentFundingLocked fundingLockedMsg ->
                     return! (this.KnownPeers.[peerId] :> IActor<_>).Put(EncodeMsg fundingLockedMsg)
                 | BothFundingLocked _ -> ()
+                | WeAcceptedGeewalletPayment _
                 | WeAcceptedUpdateAddHTLC _
                 | WeAcceptedFulfillHTLC _
                 | WeAcceptedFailHTLC _ -> ()
                 | WeAcceptedFailMalformedHTLC _ -> ()
                 | WeAcceptedUpdateFee _ -> ()
-                | WeAcceptedCommitmentSigned  _ -> failwith "TODO: route"
+                | WeAcceptedCommitmentSigned (msg, _) ->
+                    return! (this.KnownPeers.[peerId] :> IActor<_>).Put(EncodeMsg msg)
                 | WeAcceptedRevokeAndACK _ -> failwith "TODO: route"
                 // The one which includes `CMD` in its names is the one started by us.
                 // So there are no need to think about routing, just send it to specified peer.
+                | ChannelEvent.WeAcceptedCMDGeewalletPayment (msg, _) ->
+                    return! (this.KnownPeers.[peerId] :> IActor<_>).Put(EncodeMsg msg)
                 | ChannelEvent.WeAcceptedCMDAddHTLC (msg, _) ->
                     return! (this.KnownPeers.[peerId] :> IActor<_>).Put(EncodeMsg msg)
                 | ChannelEvent.WeAcceptedCMDFulfillHTLC (msg, _) ->

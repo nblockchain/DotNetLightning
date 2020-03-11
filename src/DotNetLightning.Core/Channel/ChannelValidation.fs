@@ -169,6 +169,13 @@ module internal Validation =
         *> AcceptChannelMsgValidation.checkConfigPermits conf.PeerChannelConfigLimits msg
         |> Result.mapError(InvalidAcceptChannelError.Create msg >> InvalidAcceptChannel)
 
+    let checkOurGeewalletPaymentIsAcceptableWithCurrentSpec (currentSpec) (state: Commitments) (payment: GeewalletPayment) =
+        Validation.ofResult(GeewalletPaymentValidationWithContext.checkWeHaveSufficientFunds state currentSpec)
+        |> Result.mapError(InvalidGeewalletPaymentError.Create payment >> InvalidGeewalletPayment)
+
+    let checkTheirGeewalletPaymentIsAcceptableWithCurrentSpec (currentSpec) (state: Commitments) (payment: GeewalletPayment) =
+        Validation.ofResult(GeewalletPaymentValidationWithContext.checkWeHaveSufficientFunds state currentSpec)
+        |> Result.mapError(InvalidGeewalletPaymentError.Create payment >> InvalidGeewalletPayment)
 
     let checkCMDAddHTLC (state: NormalData) (cmd: CMDAddHTLC) =
         Validation.ofResult(UpdateAddHTLCValidation.checkExpiryIsNotPast cmd.CurrentHeight cmd.Expiry)

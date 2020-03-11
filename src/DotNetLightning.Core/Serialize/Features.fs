@@ -181,6 +181,11 @@ type FeatureBit private (bitArray) =
                 bytes <- this.BitArray.ToByteArray()
             bytes
         and set(v: byte[]) = bytes <- v
+    new() =
+        FeatureBit(
+            let b: bool array = [||]
+            BitArray(b)
+        )
     static member TryCreate(ba: BitArray) =
         result {
             do! Feature.validateFeatureGraph(ba)
@@ -192,9 +197,7 @@ type FeatureBit private (bitArray) =
             else
                 return (FeatureBit(ba))
         }
-    static member Zero =
-        let b: bool array = [||]
-        b |> BitArray |> FeatureBit
+    static member Zero = FeatureBit()
     static member TryCreate(bytes: byte[]) =
         result {
             let! fb = FeatureBit.TryCreate(BitArray.FromBytes(bytes))

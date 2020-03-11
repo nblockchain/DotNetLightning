@@ -21,6 +21,10 @@ open NBitcoin
 //      Y88b  d88P Y88b. .d88P 888   "   888 888   "   888  d8888888888 888   Y8888 888  .d88P Y88b  d88P
 //       "Y8888P"   "Y88888P"  888       888 888       888 d88P     888 888    Y888 8888888P"   "Y8888P"
 
+type CMDGeewalletPayment = {
+    Amount: LNMoney
+}
+
 type CMDAddHTLC = {
     AmountMSat: LNMoney
     PaymentHash: PaymentHash
@@ -206,6 +210,8 @@ type ChannelCommand =
     | CreateChannelReestablish
 
     // normal
+    | GeewalletPayment of CMDGeewalletPayment
+    | ApplyGeewalletPayment of msg: GeewalletPayment
     | AddHTLC of CMDAddHTLC
     | ApplyUpdateAddHTLC of msg: UpdateAddHTLC * currentHeight: BlockHeight
     | FulfillHTLC of CMDFulfillHTLC

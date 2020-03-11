@@ -264,6 +264,9 @@ type ChannelEvent =
     | BothFundingLocked of nextState: Data.NormalData
 
     // -------- normal operation ------
+    | WeAcceptedCMDGeewalletPayment of msg: GeewalletPayment * newCommitments: Commitments
+    | WeAcceptedGeewalletPayment of newCommitments: Commitments
+
     | WeAcceptedCMDAddHTLC of msg: UpdateAddHTLC * newCommitments: Commitments
     | WeAcceptedUpdateAddHTLC of newCommitments: Commitments
 
