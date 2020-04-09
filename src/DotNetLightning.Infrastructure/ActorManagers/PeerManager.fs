@@ -190,15 +190,20 @@ type PeerManager(eventAggregator: IEventAggregator,
                 | WeSentFundingLocked fundingLockedMsg ->
                     return! (this.KnownPeers.[peerId] :> IActor<_>).Put(EncodeMsg fundingLockedMsg)
                 | BothFundingLocked _ -> ()
+                | WeAcceptedMonoHopUnidirectionalPayment _
                 | WeAcceptedUpdateAddHTLC _
                 | WeAcceptedFulfillHTLC _
                 | WeAcceptedFailHTLC _ -> ()
                 | WeAcceptedFailMalformedHTLC _ -> ()
                 | WeAcceptedUpdateFee _ -> ()
-                | WeAcceptedCommitmentSigned  _ -> failwith "TODO: route"
-                | WeAcceptedRevokeAndACK _ -> failwith "TODO: route"
+                | WeAcceptedCommitmentSigned (msg, _) ->
+                    return! (this.KnownPeers.[peerId] :> IActor<_>).Put(EncodeMsg msg)
+                | WeAcceptedRevokeAndACK _ ->
+                    Console.WriteLine "WARNING: revoke_and_ack handling is not implemented"
                 // The one which includes `Operation` in its names is the one started by us.
                 // So there are no need to think about routing, just send it to specified peer.
+                | ChannelEvent.WeAcceptedOperationMonoHopUnidirectionalPayment (msg, _) ->
+                    return! (this.KnownPeers.[peerId] :> IActor<_>).Put(EncodeMsg msg)
                 | ChannelEvent.WeAcceptedOperationAddHTLC (msg, _) ->
                     return! (this.KnownPeers.[peerId] :> IActor<_>).Put(EncodeMsg msg)
                 | ChannelEvent.WeAcceptedOperationFulfillHTLC (msg, _) ->
