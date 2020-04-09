@@ -8,7 +8,7 @@
     <When Condition="'$(BouncyCastle)'=='true'">
       <PropertyGroup>
         <OtherFlags>$(OtherFlags) -d:BouncyCastle</OtherFlags>
-        <PackageId>DotNetLightning</PackageId>
+        <PackageId>DotNetLightning.Kiss</PackageId>
       </PropertyGroup>
     </When>
     <Otherwise>
