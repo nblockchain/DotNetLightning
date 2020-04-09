@@ -83,6 +83,8 @@ module internal TypeFlag =
     let ReplyChannelRange = 264us
     [<Literal>]
     let GossipTimestampFilter = 265us
+    [<Literal>]
+    let MonoHopUnidirectionalPayment = 42198us
 
 type ILightningMsg = interface end
 type ISetupMsg = inherit ILightningMsg
@@ -174,6 +176,8 @@ module ILightningSerializable =
             deserialize<ReplyChannelRange>(ls) :> ILightningMsg
         | TypeFlag.GossipTimestampFilter ->
             deserialize<GossipTimestampFilter>(ls) :> ILightningMsg
+        | TypeFlag.MonoHopUnidirectionalPayment ->
+            deserialize<MonoHopUnidirectionalPayment>(ls) :> ILightningMsg
         | x ->
             raise <| FormatException(sprintf "Unknown message type %d" x)
     let serializeWithFlags (ls: LightningWriterStream) (data: ILightningMsg) =
@@ -262,6 +266,9 @@ module ILightningSerializable =
         | :? GossipTimestampFilter as d ->
             ls.Write(TypeFlag.GossipTimestampFilter, false)
             (d :> ILightningSerializable<GossipTimestampFilter>).Serialize(ls)
+        | :? MonoHopUnidirectionalPayment as d ->
+            ls.Write(TypeFlag.MonoHopUnidirectionalPayment, false)
+            (d :> ILightningSerializable<MonoHopUnidirectionalPayment>).Serialize(ls)
         | x -> failwithf "%A is not known lightning message. This should never happen" x
 
 module LightningMsg =
@@ -1543,3 +1550,19 @@ type GossipTimestampFilter = {
             ls.Write(this.FirstTimestamp, false)
             ls.Write(this.TimestampRange, false)
             
+[<CLIMutable>]
+type MonoHopUnidirectionalPayment = {
+    mutable ChannelId: ChannelId
+    mutable Amount: LNMoney
+}
+with
+    interface IHTLCMsg
+    interface IUpdateMsg
+    interface ILightningSerializable<MonoHopUnidirectionalPayment> with
+        member this.Deserialize(ls) =
+            this.ChannelId <- ls.ReadUInt256(true) |> ChannelId
+            this.Amount <- ls.ReadUInt64(false) |> LNMoney.MilliSatoshis
+        member this.Serialize(ls) =
+            ls.Write(this.ChannelId.Value.ToBytes())
+            ls.Write(this.Amount.MilliSatoshi, false)
+

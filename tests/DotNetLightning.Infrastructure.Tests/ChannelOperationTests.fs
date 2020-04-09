@@ -212,6 +212,31 @@ type internal ActorCreator =
         return actors
     }
     
+    static member sendMonoHopUnidirectionalPayment alice bob = async {
+        let bobNodeId = bob.CM.KeysRepository.GetNodeSecret().PubKey |> NodeId
+        let aliceNodeId = alice.CM.KeysRepository.GetNodeSecret().PubKey |> NodeId
+
+        do! Async.Sleep 1000
+        Console.WriteLine("testing mono-hop unidirectional payment")
+
+
+        let aliceToBobAmount = TestConstants.monoHopPaymentAmount
+        let monoHopUnidirectionalPaymentCmd = {
+            Amount = aliceToBobAmount
+        }
+
+        // Send mono-hop unidirectional payment from alice to bob
+        let bobAcceptedMonoHopUnidirectionalPaymentTask =
+            bob.EventAggregator.AwaitChannelEvent(function WeAcceptedMonoHopUnidirectionalPayment _ -> Some () | _ -> None)
+        do!
+            alice.CM.AcceptCommandAsync({
+                NodeId = bobNodeId
+                ChannelCommand = ChannelCommand.MonoHopUnidirectionalPayment monoHopUnidirectionalPaymentCmd
+            }).AsTask() |> Async.AwaitTask
+
+        let! r = bobAcceptedMonoHopUnidirectionalPaymentTask
+        Expect.isSome r "timeout waiting for bob to accept mono-hop unidirectional payment"
+    }
     
 [<Tests>]
 let tests =
@@ -312,8 +337,82 @@ let tests =
             
             return ()
         }
-        
-        ptestAsync "Normal channel operation" { 
+
+        testAsync "Send mono-hop unidirectional payment" {
+            do! Async.Sleep 1000
+
+            Console.WriteLine("starting mono-hop unidirectional payment test")
+            let alice = ActorCreator.getAlice()
+            let bob = ActorCreator.getBob()
+            let! actors = ActorCreator.initiateOpenedChannel(alice, bob)
+            let bobNodeId = bob.CM.KeysRepository.GetNodeSecret().PubKey |> NodeId
+            let aliceNodeId = alice.CM.KeysRepository.GetNodeSecret().PubKey |> NodeId
+
+            do! ActorCreator.sendMonoHopUnidirectionalPayment alice bob
+
+            do! Async.Sleep 1000
+            Console.WriteLine("alice signs her commit")
+
+            let aliceAcceptedSign =
+                alice.EventAggregator.AwaitChannelEvent(function WeAcceptedOperationSign (_, commitments) -> Some commitments | _ -> None)
+            let aliceAcceptedRevokeAndAck =
+                alice.EventAggregator.AwaitChannelEvent(function WeAcceptedRevokeAndACK commitments -> Some commitments | _ -> None)
+            let bobAcceptedSign =
+                bob.EventAggregator.AwaitChannelEvent(function WeAcceptedCommitmentSigned (revokeAndAck, commitments) -> Some (revokeAndAck, commitments) | _ -> None)
+            do! alice.CM.AcceptCommandAsync({ NodeId = bobNodeId; ChannelCommand = SignCommitment }).AsTask() |> Async.AwaitTask
+            let! r = aliceAcceptedSign
+            Expect.isSome r "timeout waiting for alice to accept sign command"
+            let! r = bobAcceptedSign
+            Expect.isSome r "timeout waiting for bob to accept commitment signature"
+            let revokeAndAck, bobCommitments = r.Value
+            let! r = aliceAcceptedRevokeAndAck
+            Expect.isSome r "timeout waiting for alice to accept revoke_and_ack"
+            let aliceCommitments = r.Value
+
+
+            do! Async.Sleep 1000
+            Console.WriteLine("bob signs his commit")
+
+            let bobAcceptedSign =
+                bob.EventAggregator.AwaitChannelEvent(function WeAcceptedOperationSign (_, commitments) -> Some commitments | _ -> None)
+            let bobAcceptedRevokeAndAck =
+                bob.EventAggregator.AwaitChannelEvent(function WeAcceptedRevokeAndACK commitments -> Some commitments | _ -> None)
+            let aliceAcceptedSign =
+                alice.EventAggregator.AwaitChannelEvent(function WeAcceptedCommitmentSigned (revokeAndAck, commitments) -> Some (revokeAndAck, commitments) | _ -> None)
+            do! bob.CM.AcceptCommandAsync({ NodeId = aliceNodeId; ChannelCommand = SignCommitment }).AsTask() |> Async.AwaitTask
+            let! r = bobAcceptedSign
+            Expect.isSome r "timeout waiting for bob to accept sign command"
+            let! r = aliceAcceptedSign
+            Expect.isSome r "timeout waiting for alice to accept commitment signature"
+            let revokeAndAck, aliceCommitments = r.Value
+            let! r = bobAcceptedRevokeAndAck
+            Expect.isSome r "timeout waiting for bob to accept revoke_and_ack"
+            let bobCommitments = r.Value
+
+            let aliceInitialBalance = LNMoney.Satoshis(TestConstants.fundingSatoshis.Satoshi) - TestConstants.pushMsat
+            let aliceFinalBalance = aliceCommitments.LocalCommit.Spec.ToLocal
+            let aliceExpectedFinalBalance = aliceInitialBalance - TestConstants.monoHopPaymentAmount
+
+            let bobInitialBalance = TestConstants.pushMsat
+            let bobFinalBalance = bobCommitments.LocalCommit.Spec.ToLocal
+            let bobExpectedFinalBalance = bobInitialBalance + TestConstants.monoHopPaymentAmount
+
+            do! Async.Sleep 1000
+
+            Expect.equal
+                aliceFinalBalance
+                aliceExpectedFinalBalance
+                "alice's balance was not updated correctly"
+
+            Expect.equal
+                bobFinalBalance
+                bobExpectedFinalBalance
+                "bob's balance was not updated correctly"
+
+            Console.WriteLine("finishing mono-hop unidirectional payment with revoke_and_ack test")
+        }
+
+        ptestAsync "Normal channel operation" {
             let alice = ActorCreator.getAlice()
             let bob = ActorCreator.getBob()
             let! actors = ActorCreator.initiateOpenedChannel(alice, bob)
