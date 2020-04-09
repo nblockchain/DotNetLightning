@@ -16,6 +16,7 @@ type TestEntity =
         NodeParams: ChainConfig
     }
 
+let monoHopPaymentAmount = 1000L |> LNMoney.MilliSatoshis
 let fundingSatoshis = 1000000L |> Money.Satoshis
 let pushMsat = 200000000L |> LNMoney.MilliSatoshis
 let feeratePerKw = 10000u |> FeeRatePerKw 
