@@ -395,6 +395,32 @@ module Channel =
                 [] |> Ok
 
         // ---------- normal operation ---------
+        | ChannelState.Normal state, MonoHopUnidirectionalPayment op when state.LocalShutdown.IsSome || state.RemoteShutdown.IsSome ->
+            sprintf "Could not send mono-hop unidirectional payment %A since shutdown is already in progress." op
+            |> apiMisuse
+        | ChannelState.Normal state, MonoHopUnidirectionalPayment op ->
+            result {
+                let payment: MonoHopUnidirectionalPayment = {
+                    ChannelId = state.Commitments.ChannelId
+                    Amount = op.Amount
+                }
+                let commitments1 = state.Commitments.AddLocalProposal(payment)
+
+                let remoteCommit1 =
+                    match commitments1.RemoteNextCommitInfo with
+                    | RemoteNextCommitInfo.Waiting info -> info.NextRemoteCommit
+                    | RemoteNextCommitInfo.Revoked _info -> commitments1.RemoteCommit
+                let! reduced = remoteCommit1.Spec.Reduce(commitments1.RemoteChanges.ACKed, commitments1.LocalChanges.Proposed) |> expectTransactionError
+                do! Validation.checkOurMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec reduced commitments1 payment
+                return [ WeAcceptedOperationMonoHopUnidirectionalPayment(payment, commitments1) ]
+            }
+        | ChannelState.Normal state, ApplyMonoHopUnidirectionalPayment msg ->
+            result {
+                let commitments1 = state.Commitments.AddRemoteProposal(msg)
+                let! reduced = commitments1.LocalCommit.Spec.Reduce (commitments1.LocalChanges.ACKed, commitments1.RemoteChanges.Proposed) |> expectTransactionError
+                do! Validation.checkTheirMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec reduced commitments1 msg
+                return [ WeAcceptedMonoHopUnidirectionalPayment commitments1 ]
+            }
         | ChannelState.Normal state, AddHTLC op when state.LocalShutdown.IsSome || state.RemoteShutdown.IsSome ->
             sprintf "Could not add new HTLC %A since shutdown is already in progress." op
             |> apiMisuse
@@ -491,10 +517,9 @@ module Channel =
                                              RemoteCommit = theirNextCommit
                                              RemoteNextCommitInfo = RemoteNextCommitInfo.Revoked(msg.NextPerCommitmentPoint)
                                              RemotePerCommitmentSecrets = cm.RemotePerCommitmentSecrets.AddHash (msg.PerCommitmentSecret.ToByteArray(), 0xffffffffffffUL - cm.RemoteCommit.Index) }
+                Console.WriteLine("WARNING: revocation is not implemented yet")
                 let result = [ WeAcceptedRevokeAndACK(commitments1) ]
                 result |> Ok
-                failwith "needs update"
-
 
         | ChannelState.Normal state, ChannelCommand.Close cmd ->
             let localSPK = cmd.ScriptPubKey |> Option.defaultValue (state.Commitments.LocalParams.DefaultFinalScriptPubKey)
@@ -737,8 +762,12 @@ module Channel =
             { c with State = ChannelState.Normal data }
 
         // ----- normal operation --------
+        | WeAcceptedOperationMonoHopUnidirectionalPayment(_, newCommitments), ChannelState.Normal normalData ->
+            { c with State = ChannelState.Normal({ normalData with Commitments = newCommitments }) }
         | WeAcceptedOperationAddHTLC(_, newCommitments), ChannelState.Normal d ->
             { c with State = ChannelState.Normal({ d with Commitments = newCommitments }) }
+        | WeAcceptedMonoHopUnidirectionalPayment(newCommitments), ChannelState.Normal normalData ->
+            { c with State = ChannelState.Normal({ normalData with Commitments = newCommitments }) }
         | WeAcceptedUpdateAddHTLC(newCommitments), ChannelState.Normal d ->
             { c with State = ChannelState.Normal({ d with Commitments = newCommitments }) }
 
