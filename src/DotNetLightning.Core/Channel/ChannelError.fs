@@ -380,7 +380,8 @@ module internal OpenChannelMsgValidation =
             check
                 ourChannelReserve (<) msg.DustLimitSatoshis
                 "Dust limit too high for our channel reserve. our channel reserve is: %A . received dust_limit is: %A"
-        Validation.ofResult(check1) *^> check2 *^> check3
+        //Validation.ofResult(check1) *^> check2 *^> check3
+        Validation.ofResult(check3)
         
     let checkIfFundersAmountSufficient (feeEst: IFeeEstimator) msg =
         let fundersAmount = LNMoney.Satoshis(msg.FundingSatoshis.Satoshi) - msg.PushMSat
