@@ -202,6 +202,8 @@ type ChannelManager(log: ILogger<ChannelManager>,
                     return! (this.Actors.[e.NodeId.Value] :> IActor<_>).Put(ChannelCommand.RemoteShutdown m)
                 | :? ClosingSigned as m ->
                     return! (this.Actors.[e.NodeId.Value] :> IActor<_>).Put(ChannelCommand.ApplyClosingSigned m)
+                | :? MonoHopUnidirectionalPayment as m ->
+                    return! (this.Actors.[e.NodeId.Value] :> IActor<_>).Put(ChannelCommand.ApplyMonoHopUnidirectionalPayment m)
                 | :? UpdateAddHTLC as m ->
                     return! (this.Actors.[e.NodeId.Value] :> IActor<_>).Put(ChannelCommand.ApplyUpdateAddHTLC (m, this.CurrentBlockHeight))
                 | :? UpdateFulfillHTLC as m ->
