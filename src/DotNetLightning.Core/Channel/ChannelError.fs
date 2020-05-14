@@ -151,11 +151,7 @@ and InvalidMonoHopUnidirectionalPaymentError = {
     Msg: MonoHopUnidirectionalPayment
     Errors: string list
 }
-    with
-    static member Create msg e = {
-        Msg = msg
-        Errors = e
-    }
+
 and InvalidUpdateAddHTLCError = {
     Msg: UpdateAddHTLC
     Errors: string list
