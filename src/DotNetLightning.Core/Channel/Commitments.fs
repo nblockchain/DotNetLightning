@@ -213,9 +213,16 @@ type Commitments = {
                 |> LNMoney.FromMoney
             let totalBalance = reduced.ToRemote
             let untrimmedSpendableBalance = totalBalance - channelReserve - fees
+            let htlcSuccessFee =
+                reduced.FeeRatePerKw.ToFee Transactions.Constants.HTLC_SUCCESS_WEIGHT
+                |> LNMoney.FromMoney
+            let htlcFee =
+                reduced.FeeRatePerKw.ToFee Transactions.Constants.COMMITMENT_TX_WEIGHT_PER_HTLC
+                |> LNMoney.FromMoney
             let dustLimit =
                 this.RemoteParams.DustLimitSatoshis
                 |> LNMoney.FromMoney
-            let untrimmedMax = LNMoney.Min(untrimmedSpendableBalance, dustLimit)
-            let spendableBalance = LNMoney.Max(untrimmedMax, untrimmedSpendableBalance)
+            let untrimmedMax = LNMoney.Min(untrimmedSpendableBalance, htlcSuccessFee + dustLimit)
+            let trimmedSpendableBalance = untrimmedSpendableBalance - htlcFee
+            let spendableBalance = LNMoney.Max(untrimmedMax, trimmedSpendableBalance)
             spendableBalance
