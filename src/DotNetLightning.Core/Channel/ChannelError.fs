@@ -185,6 +185,13 @@ and InvalidMonoHopUnidirectionalPaymentError = {
     Msg: MonoHopUnidirectionalPayment
     Errors: string list
 }
+    with
+    static member Create msg e = {
+        Msg = msg
+        Errors = e
+    }
+    member this.Message =
+        String.concat "; " this.Errors
 
 and InvalidUpdateAddHTLCError = {
     Msg: UpdateAddHTLC
