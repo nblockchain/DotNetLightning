@@ -184,11 +184,11 @@ module internal Validation =
 
     let checkOurMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec (currentSpec) (state: Commitments) (payment: MonoHopUnidirectionalPayment) =
         Validation.ofResult(MonoHopUnidirectionalPaymentValidationWithContext.checkWeHaveSufficientFunds state currentSpec)
-        |> Result.mapError(fun errs -> InvalidMonoHopUnidirectionalPayment { Msg = payment; Errors = errs })
+        |> Result.mapError(fun errs -> InvalidMonoHopUnidirectionalPayment { NetworkMsg = payment; Errors = errs })
 
     let checkTheirMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec (currentSpec) (state: Commitments) (payment: MonoHopUnidirectionalPayment) =
         Validation.ofResult(MonoHopUnidirectionalPaymentValidationWithContext.checkWeHaveSufficientFunds state currentSpec)
-        |> Result.mapError(fun errs -> InvalidMonoHopUnidirectionalPayment { Msg = payment; Errors = errs })
+        |> Result.mapError(fun errs -> InvalidMonoHopUnidirectionalPayment { NetworkMsg = payment; Errors = errs })
 
     let checkOperationAddHTLC (state: NormalData) (op: OperationAddHTLC) =
         Validation.ofResult(UpdateAddHTLCValidation.checkExpiryIsNotPast op.CurrentHeight op.Expiry)

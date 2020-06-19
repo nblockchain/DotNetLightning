@@ -158,72 +158,72 @@ and ChannelConsumerAction =
     /// But it maybe good to report the log message, or maybe lower the peer score.
     | Ignore
 and InvalidOpenChannelError = {
-    Msg: OpenChannel
+    NetworkMsg: OpenChannel
     Errors: string list
 }
     with
     static member Create msg e = {
-        Msg = msg
+        NetworkMsg = msg
         Errors = e
     }
     member this.Message =
         String.concat "; " this.Errors
     
 and InvalidAcceptChannelError = {
-    Msg: AcceptChannel
+    NetworkMsg: AcceptChannel
     Errors: string list
 }
     with
     static member Create msg e = {
-        Msg = msg
+        NetworkMsg = msg
         Errors = e
     }
     member this.Message =
         String.concat "; " this.Errors
     
 and InvalidMonoHopUnidirectionalPaymentError = {
-    Msg: MonoHopUnidirectionalPayment
+    NetworkMsg: MonoHopUnidirectionalPayment
     Errors: string list
 }
     with
     static member Create msg e = {
-        Msg = msg
+        NetworkMsg = msg
         Errors = e
     }
     member this.Message =
         String.concat "; " this.Errors
 
 and InvalidUpdateAddHTLCError = {
-    Msg: UpdateAddHTLC
+    NetworkMsg: UpdateAddHTLC
     Errors: string list
 }
     with
     static member Create msg e = {
-        Msg = msg
+        NetworkMsg = msg
         Errors = e
     }
     member this.Message =
         String.concat "; " this.Errors
 
 and InvalidRevokeAndACKError = {
-    Msg: RevokeAndACK
+    NetworkMsg: RevokeAndACK
     Errors: string list
 }
     with
     static member Create msg e = {
-        Msg = msg
+        NetworkMsg = msg
         Errors = e
     }
     member this.Message =
         String.concat "; " this.Errors
 
 and InvalidUpdateFeeError = {
-    Msg: UpdateFee
+    NetworkMsg: UpdateFee
     Errors: string list
 }
     with
     static member Create msg e = {
-        Msg = msg
+        NetworkMsg = msg
         Errors = e
     }
     member this.Message =
