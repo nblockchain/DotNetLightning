@@ -143,6 +143,8 @@ type LightningWriterStream(inner: Stream) =
         this.Inner.WriteByte(data.Red)
         this.Inner.WriteByte(data.Green)
         this.Inner.WriteByte(data.Blue)
+    member this.Write(commitmentNumber: CommitmentNumber) =
+        this.Write((UInt48.MaxValue - commitmentNumber.Index).UInt64, false)
 
     member this.WriteWithLen(data: byte[]) =
         let length = data.Length
@@ -327,6 +329,18 @@ type LightningReaderStream(inner: Stream) =
             PubKey(b, true)
         else
             raise (FormatException("Invalid Pubkey encoding"))
+
+    member this.ReadRevocationKey() =
+        let bytes = this.ReadBytes RevocationKey.BytesLength
+        RevocationKey.FromBytes bytes
+
+    member this.ReadCommitmentPubKey() =
+        let bytes = this.ReadBytes CommitmentPubKey.BytesLength
+        CommitmentPubKey.FromBytes bytes
+
+    member this.ReadCommitmentNumber() =
+        let n = this.ReadUInt64 false
+        CommitmentNumber <| (UInt48.MaxValue - (UInt48.FromUInt64 n))
 
     member this.ReadECDSACompact() =
         let data = this.ReadBytes(64)

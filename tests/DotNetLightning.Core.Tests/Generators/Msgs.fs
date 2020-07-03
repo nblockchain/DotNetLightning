@@ -96,7 +96,7 @@ let openChannelGen =
         <*> pubKeyGen
         <*> pubKeyGen
         <*> pubKeyGen
-        <*> pubKeyGen
+        <*> commitmentPubKeyGen
         <*> Arb.generate<uint8>
         <*> (Gen.optionOf pushScriptGen)
 
@@ -134,7 +134,7 @@ let acceptChannelGen =
         <*> pubKeyGen
         <*> pubKeyGen
         <*> pubKeyGen
-        <*> pubKeyGen
+        <*> commitmentPubKeyGen
         <*> (Gen.optionOf pushScriptGen)
 
 let fundingCreatedGen =
@@ -163,7 +163,7 @@ let fundingSignedGen = gen {
 
 let fundingLockedGen = gen {
     let! c = ChannelId <!> uint256Gen
-    let! pk = pubKeyGen
+    let! pk = commitmentPubKeyGen
     return {ChannelId = c; NextPerCommitmentPoint = pk}
 }
 
@@ -251,11 +251,11 @@ let commitmentSignedGen = gen {
 
 let revokeAndACKGen = gen {
     let! c = ChannelId <!> uint256Gen
-    let! paymentPreimage = PaymentPreimage.Create <!> bytesOfNGen PaymentPreimage.LENGTH
-    let! pk = pubKeyGen 
+    let! revocationKey = revocationKeyGen
+    let! pk = commitmentPubKeyGen 
     return {
         ChannelId = c
-        PerCommitmentSecret = paymentPreimage
+        PerCommitmentSecret = revocationKey
         NextPerCommitmentPoint = pk
     }
 }
@@ -269,24 +269,24 @@ let updateFeeGen = gen {
 }
 
 let private dataLossProtectGen = gen {
-    let! paymentPreimage = PaymentPreimage.Create <!> bytesOfNGen PaymentPreimage.LENGTH
-    let! pk = pubKeyGen
+    let! revocationKey = revocationKeyGen
+    let! pk = commitmentPubKeyGen
     return {
-        YourLastPerCommitmentSecret = paymentPreimage
+        YourLastPerCommitmentSecret = Some revocationKey
         MyCurrentPerCommitmentPoint = pk
     }
 }
 
 let channelReestablishGen = gen {
     let! c = ChannelId <!> uint256Gen
-    let! n1 = Arb.generate<uint64>
-    let! n2 = Arb.generate<uint64>
+    let! n1 = commitmentNumberGen
+    let! n2 = commitmentNumberGen
     let! d = Gen.optionOf dataLossProtectGen
 
     return {
         ChannelId = c
-        NextLocalCommitmentNumber = n1
-        NextRemoteCommitmentNumber = n2
+        NextCommitmentNumber = n1
+        NextRevocationNumber = n2
         DataLossProtect = d
     }
 }
