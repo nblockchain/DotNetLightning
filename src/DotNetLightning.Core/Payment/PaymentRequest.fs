@@ -258,11 +258,11 @@ type TaggedField =
         | DescriptionHashTaggedField h ->
             let dBase32 = h.ToBytes(false) |> Helpers.convert8BitsTo5
             this.WriteField(writer, dBase32)
-        | NodeIdTaggedField(NodeId pk) ->
-            let dBase32 = pk.ToBytes() |> Helpers.convert8BitsTo5
+        | NodeIdTaggedField(nodeId) ->
+            let dBase32 = nodeId.Value.ToBytes() |> Helpers.convert8BitsTo5
             this.WriteField(writer, dBase32)
-        | MinFinalCltvExpiryTaggedField (BlockHeightOffset32 c) ->
-            let dBase32 = c |> uint64 |> Helpers.uint64ToBase32
+        | MinFinalCltvExpiryTaggedField (blockHeightOffset32) ->
+            let dBase32 = blockHeightOffset32.Value |> uint64 |> Helpers.uint64ToBase32
             this.WriteField(writer, dBase32)
         | ExpiryTaggedField x ->
             let dBase32 = ((x.ToUnixTimeSeconds() |> uint64) - timestamp) |> Helpers.uint64ToBase32

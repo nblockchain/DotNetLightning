@@ -1370,7 +1370,7 @@ type ErrorMsg =
                 this.Data <- ls.ReadWithLen()
             member this.Serialize(ls) =
                 match this.ChannelId with
-                | SpecificChannel (ChannelId id) -> ls.Write(id.ToBytes())
+                | SpecificChannel id -> ls.Write(id.Value.ToBytes())
                 | All -> ls.Write(Array.zeroCreate 32)
                 ls.WriteWithLen(this.Data)
 

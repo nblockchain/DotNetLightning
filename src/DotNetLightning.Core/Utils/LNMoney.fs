@@ -21,7 +21,7 @@ type LNMoneyUnit =
 /// (i.e. We might want to support this package in BTCPayServer.Lightning)
 /// refs: https://github.com/btcpayserver/BTCPayServer.Lightning/blob/f65a883a63bf607176a3b7b0baa94527ac592f5e/src/BTCPayServer.Lightning.Common/LightMoney.cs
 [<Struct>]
-type LNMoney = | LNMoney of int64 with
+type LNMoney(millisatoshis: int64) =
 
     static member private BitcoinStyle =
         NumberStyles.AllowLeadingWhite ||| NumberStyles.AllowTrailingWhite |||
@@ -80,17 +80,19 @@ type LNMoney = | LNMoney of int64 with
         | true, v -> v
         | _ -> raise (FormatException("Impossible to parse the string in a bitcoin amount"))
 
+    member this.MilliSatoshi = millisatoshis
+    member this.Satoshi = this.MilliSatoshi / 1000L
+    member this.BTC = this.MilliSatoshi / (int64 LNMoneyUnit.BTC)
+    member this.Value = this.MilliSatoshi
+    member this.ToMoney() = this.Satoshi |> Money
+
     // -------- Arithmetic operations
-    static member (+) (LNMoney a, LNMoney b) = LNMoney(a + b)
-    static member (-) (LNMoney a, LNMoney b) = LNMoney(a - b)
-    static member (*) (LNMoney a, LNMoney b) = LNMoney(a * b)
-    static member (/) (LNMoney a, LNMoney b) = LNMoney(a / b)
-    static member inline (/) (LNMoney a, b) = LNMoney(a / (int64 b))
-    static member inline (+) (LNMoney a, b) = LNMoney(a + (int64 b))
-    static member inline (-) (LNMoney a, b) = LNMoney(a - (int64 b))
-    static member inline (*) (LNMoney a, b) = LNMoney(a * (int64 b))
-    static member Max(LNMoney a, LNMoney b) = if a >= b then LNMoney a else LNMoney b
-    static member Min(LNMoney a, LNMoney b) = if a <= b then LNMoney a else LNMoney b
+    static member (+) (a: LNMoney, b: LNMoney) = LNMoney(a.MilliSatoshi + b.MilliSatoshi)
+    static member (-) (a: LNMoney, b: LNMoney) = LNMoney(a.MilliSatoshi - b.MilliSatoshi)
+    static member inline (/) (a: LNMoney, b) = LNMoney(a.MilliSatoshi / (int64 b))
+    static member inline (*) (a: LNMoney, b) = LNMoney(a.MilliSatoshi * (int64 b))
+    static member Max(a: LNMoney, b: LNMoney) = if a.MilliSatoshi >= b.MilliSatoshi then a else b
+    static member Min(a: LNMoney, b: LNMoney) = if a.MilliSatoshi <= b.MilliSatoshi then a else b
     
     static member MaxValue =
         let maxSatoshis = 21000000UL * (uint64 Money.COIN)
@@ -101,12 +103,6 @@ type LNMoney = | LNMoney of int64 with
     // --------- Utilities
     member this.Abs() =
         if this < LNMoney.Zero then LNMoney(-this.Value) else this
-
-    member this.MilliSatoshi = let (LNMoney v) = this in v
-    member this.Satoshi = this.MilliSatoshi / 1000L
-    member this.BTC = this.MilliSatoshi / (int64 LNMoneyUnit.BTC)
-    member this.Value = this.MilliSatoshi
-    member this.ToMoney() = this.Satoshi |> Money
 
     member this.Split(parts: int): LNMoney seq =
         if parts <= 0 then

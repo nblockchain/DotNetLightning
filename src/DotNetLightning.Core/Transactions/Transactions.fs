@@ -176,10 +176,9 @@ type ClosingTx = ClosingTx of PSBT
 
 
 /// Tx already verified and it can be published anytime
-type FinalizedTx =
-    FinalizedTx of Transaction
-    with
-        member this.Value = let (FinalizedTx v) = this in v
+[<Struct>]
+type FinalizedTx(tx: Transaction) =
+    member this.Value = tx
 
 type InputInfo = {
     OutPoint: OutPoint

@@ -35,7 +35,7 @@ type MacaroonIdentifier =
         | 0us ->
             if (b.Length <> 2 + 32 + 32) then e else
             {
-                PaymentHash = PaymentHash.PaymentHash(uint256(b.[2..33], false))
+                PaymentHash = PaymentHash(uint256(b.[2..33], false))
                 TokenId = uint256(b.[34..], false)
             }
             |> V0

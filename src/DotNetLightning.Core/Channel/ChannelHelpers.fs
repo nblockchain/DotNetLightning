@@ -9,8 +9,8 @@ open NBitcoin
 /// cousin of `ChannelHelpers` module which only includes very primitive function.
 module internal ChannelConstantHelpers =
     let deriveOurDustLimitSatoshis (feeEstimator: IFeeEstimator): Money =
-        let (FeeRatePerKw atOpenBackGroundFee) = feeEstimator.GetEstSatPer1000Weight(ConfirmationTarget.Background)
-        (Money.Satoshis((uint64 atOpenBackGroundFee) * B_OUTPUT_PLUS_SPENDING_INPUT_WEIGHT / 1000UL), Money.Satoshis(546UL))
+        let atOpenBackGroundFee = feeEstimator.GetEstSatPer1000Weight(ConfirmationTarget.Background)
+        (Money.Satoshis((uint64 atOpenBackGroundFee.Value) * B_OUTPUT_PLUS_SPENDING_INPUT_WEIGHT / 1000UL), Money.Satoshis(546UL))
         |> Money.Max
         
     let getOurChannelReserve (channelValue: Money) =

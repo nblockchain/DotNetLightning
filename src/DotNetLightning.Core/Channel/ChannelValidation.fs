@@ -21,9 +21,9 @@ module internal ChannelHelpers =
                       [| theirFundingPubKey; ourFundingKey |]
         PayToMultiSigTemplate.Instance.GenerateScriptPubKey(2, pks)
 
-    let getFundingScriptCoin (ck: ChannelPubKeys) (theirFundingPubKey: PubKey) (TxId fundingTxId) (TxOutIndex fundingOutputIndex) (fundingSatoshis): ScriptCoin =
+    let getFundingScriptCoin (ck: ChannelPubKeys) (theirFundingPubKey: PubKey) (fundingTxId: TxId) (fundingOutputIndex: TxOutIndex) (fundingSatoshis): ScriptCoin =
         let redeem = getFundingRedeemScript ck theirFundingPubKey
-        Coin(fundingTxId, uint32 fundingOutputIndex, fundingSatoshis, redeem.WitHash.ScriptPubKey)
+        Coin(fundingTxId.Value, uint32 fundingOutputIndex.Value, fundingSatoshis, redeem.WitHash.ScriptPubKey)
         |> fun c -> ScriptCoin(c, redeem)
 
     let private makeFlags (isNode1: bool, enable: bool) =
@@ -52,14 +52,14 @@ module internal ChannelHelpers =
         }
 
     /// gets the fee we'd want to charge for adding an HTLC output to this channel
-    let internal getOurFeeBaseMSat (feeEstimator: IFeeEstimator) (FeeRatePerKw feeRatePerKw) (isFunder: bool) =
+    let internal getOurFeeBaseMSat (feeEstimator: IFeeEstimator) (feeRatePerKw: FeeRatePerKw) (isFunder: bool) =
         // for lack of a better metric, we calculate waht it would cost to consolidate the new HTLC
         // output value back into a transaction with the regular channel output:
 
         // the fee cost of the HTLC-success/HTLC-Timout transaction
-        let mutable res = uint64 feeRatePerKw * (max (ChannelConstants.HTLC_TIMEOUT_TX_WEIGHT) (ChannelConstants.HTLC_TIMEOUT_TX_WEIGHT)) |> fun r -> r / 1000UL
+        let mutable res = uint64 feeRatePerKw.Value * (max (ChannelConstants.HTLC_TIMEOUT_TX_WEIGHT) (ChannelConstants.HTLC_TIMEOUT_TX_WEIGHT)) |> fun r -> r / 1000UL
         if (isFunder) then
-            res <- res + uint64 feeRatePerKw * COMMITMENT_TX_WEIGHT_PER_HTLC / 1000UL
+            res <- res + uint64 feeRatePerKw.Value * COMMITMENT_TX_WEIGHT_PER_HTLC / 1000UL
 
         //+ the marginal cost of an input which spends the HTLC-Success/HTLC-Timeout output:
         res <-

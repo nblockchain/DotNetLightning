@@ -2,8 +2,8 @@ namespace DotNetLightning.Utils
 
 open NBitcoin
 
-[<StructuralComparison;StructuralEquality>]
-type TxId = | TxId of uint256 with
-    member x.Value = let (TxId v) = x in v
+[<Struct;StructuralComparison;StructuralEquality>]
+type TxId(id: uint256) =
+    member x.Value = id
     static member Zero = uint256.Zero |> TxId
 
