@@ -95,6 +95,7 @@
     <Compile Include="Routing\RouterState.fs" />
     <Compile Include="Routing\RouterTypes.fs" />
     <Compile Include="Routing\Router.fs" />
+    <Compile Include="JsonMarshalling.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Update="FSharp.Core" Version="4.7.0" />
