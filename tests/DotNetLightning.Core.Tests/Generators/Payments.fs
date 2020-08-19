@@ -8,7 +8,7 @@ open PrimitiveGenerators
 
 
 let private macaroonIdV1Gen =
-    (uint256Gen |> Gen.map(PaymentHash.PaymentHash), uint256Gen)
+    (uint256Gen |> Gen.map(PaymentHash), uint256Gen)
     ||> Gen.map2(fun p u -> { MacaroonIdentifierV0.PaymentHash = p
                               TokenId = u })
     |> Gen.map(MacaroonIdentifier.V0)   

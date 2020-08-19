@@ -33,10 +33,10 @@ module Primitives =
 
     /// Absolute block height
     [<Struct>]
-    type BlockHeight = | BlockHeight of uint32 with
+    type BlockHeight(blockHeight: uint32) =
         static member Zero = 0u |> BlockHeight
         static member One = 1u |> BlockHeight
-        member x.Value = let (BlockHeight v) = x in v
+        member x.Value = blockHeight
         member x.AsOffset() =
             x.Value |> Checked.uint16 |> BlockHeightOffset16
 
@@ -58,8 +58,8 @@ module Primitives =
     /// 16bit relative block height used for `OP_CSV` locks,
     /// Since OP_CSV allow only block number of 0 ~ 65535, it is safe
     /// to restrict into the range smaller than BlockHeight
-    and  [<Struct>] BlockHeightOffset16 = | BlockHeightOffset16 of uint16 with
-        member x.Value = let (BlockHeightOffset16 v) = x in v
+    and  [<Struct>] BlockHeightOffset16(offset: uint16) =
+        member x.Value = offset
 
         static member ofBlockHeightOffset32(bho32: BlockHeightOffset32) =
             BlockHeightOffset16 (uint16 bho32.Value)
@@ -77,8 +77,8 @@ module Primitives =
     ///
     /// 32bit relative block height. For `OP_CSV` locks, BlockHeightOffset16
     /// should be used instead.
-    and  [<Struct>] BlockHeightOffset32 = | BlockHeightOffset32 of uint32 with
-        member x.Value = let (BlockHeightOffset32 v) = x in v
+    and [<Struct>] BlockHeightOffset32(offset: uint32) =
+        member x.Value = offset
 
         static member ofBlockHeightOffset16(bho16: BlockHeightOffset16) =
             BlockHeightOffset32 (uint32 bho16.Value)
@@ -96,9 +96,9 @@ module Primitives =
     /// 1. It is equatable
     /// 2. Some Convenience methods for serialization
     /// 3. Custom `ToString`
-    [<CustomEquality;CustomComparison;StructuredFormatDisplay("{AsString}")>]
-    type LNECDSASignature = LNECDSASignature of ECDSASignature | Empty with
-        member x.Value = match x with LNECDSASignature s -> s | Empty -> failwith "Unreachable!"
+    [<Struct;CustomEquality;CustomComparison;StructuredFormatDisplay("{AsString}")>]
+    type LNECDSASignature(signature: ECDSASignature) =
+        member x.Value = signature
         override this.GetHashCode() = hash this.Value
         override this.Equals(obj: obj) =
             match obj with
@@ -159,8 +159,9 @@ module Primitives =
         static member op_Implicit (ec: ECDSASignature) =
             ec |> LNECDSASignature
 
-    type PaymentHash = | PaymentHash of uint256 with
-        member x.Value = let (PaymentHash v) = x in v
+    [<Struct>]
+    type PaymentHash(paymentHash: uint256) =
+        member x.Value = paymentHash
         member x.ToBytes(?lEndian) =
             let e = defaultArg lEndian false
             x.Value.ToBytes(e)
@@ -206,12 +207,12 @@ module Primitives =
     let (|PaymentPreimage|) x =
         match x with
         | PaymentPreimage x -> x
-        
+
     type ConnectionId = ConnectionId of Guid
-    [<CustomEquality;CustomComparison>]
-    type PeerId = PeerId of EndPoint
-        with
-        member this.Value = let (PeerId ep) = this in ep
+
+    [<Struct;CustomEquality;CustomComparison>]
+    type PeerId(endPoint: EndPoint) =
+        member this.Value = endPoint
         
         override this.GetHashCode() = this.Value.GetHashCode()
         member this.Equals(o: PeerId) =
@@ -231,9 +232,9 @@ module Primitives =
                 | :? PeerId as p -> this.CompareTo(p)
                 | _ -> -1
 
-    [<CustomEquality;CustomComparison>]
-    type ComparablePubKey = ComparablePubKey of PubKey with
-        member x.Value = let (ComparablePubKey v) = x in v
+    [<Struct;CustomEquality;CustomComparison>]
+    type ComparablePubKey(pubKey: PubKey) =
+        member x.Value = pubKey
         interface IComparable with
             override this.CompareTo(other) =
                 match other with
@@ -247,9 +248,9 @@ module Primitives =
         static member op_Implicit (pk: PubKey) =
             pk |> ComparablePubKey
             
-    [<CustomEquality;CustomComparison>]
-    type NodeId = | NodeId of PubKey with
-        member x.Value = let (NodeId v) = x in v
+    [<Struct;CustomEquality;CustomComparison>]
+    type NodeId(id: PubKey) =
+        member x.Value = id
         interface IComparable with
             override this.CompareTo(other) =
                 match other with
@@ -264,9 +265,9 @@ module Primitives =
 
     /// Small wrapper for NBitcoin's OutPoint type
     /// So that it supports comparison and equality constraints
-    [<CustomComparison;CustomEquality>]
-    type LNOutPoint = LNOutPoint of OutPoint with
-        member x.Value = let (LNOutPoint v) = x in v
+    [<Struct;CustomComparison;CustomEquality>]
+    type LNOutPoint(outPoint: OutPoint) =
+        member x.Value = outPoint
         
         member this.CompareTo(other: LNOutPoint) =
             if this.Value.Hash > other.Value.Hash then
@@ -302,8 +303,9 @@ module Primitives =
             member this.Equals(other) = this.Equals(other)
 
     /// feerate per kilo weight
-    type FeeRatePerKw = | FeeRatePerKw of uint32 with
-        member x.Value = let (FeeRatePerKw v) = x in v
+    [<Struct>]
+    type FeeRatePerKw(feeRatePerKw: uint32) =
+        member x.Value = feeRatePerKw
         static member FromFee(fee: Money, weight: uint64) =
             (((uint64 fee.Satoshi) * weight) / 1000UL)
             |> uint32
@@ -333,23 +335,24 @@ module Primitives =
         static member (*) (a: FeeRatePerKw, b: uint32) =
             (a.Value * b) |> FeeRatePerKw
     /// Block Hash
-    type BlockId = | BlockId of uint256 with
-        member x.Value = let (BlockId v) = x in v
+    [<Struct>]
+    type BlockId(id: uint256) =
+        member x.Value = id
 
     [<Struct>]
-    type HTLCId = | HTLCId of uint64 with
+    type HTLCId(id: uint64) =
         static member Zero = HTLCId(0UL)
-        member x.Value = let (HTLCId v) = x in v
+        member x.Value = id
 
         static member (+) (a: HTLCId, b: uint64) = (a.Value + b) |> HTLCId
 
     [<Struct>]
-    type TxOutIndex = | TxOutIndex of uint16 with
-        member x.Value = let (TxOutIndex v) = x in v
+    type TxOutIndex(index: uint16) =
+        member x.Value = index
 
     [<Struct>]
-    type TxIndexInBlock = | TxIndexInBlock of uint32 with
-        member x.Value = let (TxIndexInBlock v) = x in v
+    type TxIndexInBlock(index: uint32) =
+        member x.Value = index
 
 
     [<Struct;StructuredFormatDisplay("{AsString}")>]

@@ -2,8 +2,8 @@ namespace DotNetLightning.Utils
 
 open NBitcoin
 
-type ChannelId = | ChannelId of uint256 with
-    member x.Value = let (ChannelId v) = x in v
-
+[<Struct>]
+type ChannelId(id: uint256) =
+    member x.Value = id
     static member Zero = uint256.Zero |> ChannelId
 

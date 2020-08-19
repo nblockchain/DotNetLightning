@@ -253,9 +253,9 @@ module private ValidationHelper =
 /// Helpers to create channel error
 [<AutoOpen>]
 module internal ChannelError =
-    let feeRateMismatch (FeeRatePerKw remote, FeeRatePerKw local) =
-        let remote = float remote
-        let local = float local
+    let feeRateMismatch (remote: FeeRatePerKw, local: FeeRatePerKw) =
+        let remote = float remote.Value
+        let local = float local.Value
         abs (2.0 * (remote - local) / (remote + local))
 
     let inline feeDeltaTooHigh msg (actualDelta, maxAccepted) =
