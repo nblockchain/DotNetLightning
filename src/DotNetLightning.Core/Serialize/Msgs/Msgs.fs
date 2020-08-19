@@ -523,7 +523,7 @@ with
     interface IChannelMsg
     interface ILightningSerializable<OpenChannelMsg> with
         member this.Deserialize(ls) =
-            this.Chainhash <- ls.ReadUInt256(false)
+            this.Chainhash <- ls.ReadUInt256(true)
             this.TemporaryChannelId <- ChannelId(ls.ReadUInt256(true))
             this.FundingSatoshis <- Money.Satoshis(ls.ReadUInt64(false))
             this.PushMSat <- LNMoney.MilliSatoshis(ls.ReadUInt64(false))
@@ -545,7 +545,7 @@ with
                 if (ls.Position = ls.Length) then None else
                 ls.ReadWithLen() |> Script |> Some
         member this.Serialize(ls) =
-            ls.Write(this.Chainhash, false)
+            ls.Write(this.Chainhash, true)
             ls.Write(this.TemporaryChannelId.Value, true)
             ls.Write(this.FundingSatoshis.Satoshi, false)
             ls.Write(this.PushMSat.MilliSatoshi, false)
@@ -1118,7 +1118,7 @@ with
         member this.Deserialize(ls) =
             this.Features <-
                 ls.ReadWithLen() |> FeatureBit.CreateUnsafe
-            this.ChainHash <- ls.ReadUInt256(false)
+            this.ChainHash <- ls.ReadUInt256(true)
             this.ShortChannelId <- ls.ReadUInt64(false) |> ShortChannelId.FromUInt64
             this.NodeId1 <- ls.ReadPubKey() |> NodeId
             this.NodeId2 <- ls.ReadPubKey() |> NodeId
@@ -1127,7 +1127,7 @@ with
             this.ExcessData <- match ls.TryReadAll() with Some b -> b | None -> [||]
         member this.Serialize(ls) =
             ls.WriteWithLen(this.Features.ToByteArray())
-            ls.Write(this.ChainHash, false)
+            ls.Write(this.ChainHash, true)
             ls.Write(this.ShortChannelId)
             ls.Write(this.NodeId1.Value)
             ls.Write(this.NodeId2.Value)
@@ -1176,7 +1176,7 @@ type UnsignedChannelUpdateMsg = {
     interface IRoutingMsg
     interface  ILightningSerializable<UnsignedChannelUpdateMsg> with
         member this.Deserialize(ls: LightningReaderStream): unit = 
-            this.ChainHash <- ls.ReadUInt256(false)
+            this.ChainHash <- ls.ReadUInt256(true)
             this.ShortChannelId <- ls.ReadUInt64(false) |> ShortChannelId.FromUInt64
             this.Timestamp <- ls.ReadUInt32(false)
             this.MessageFlags <- ls.ReadByte()
@@ -1191,7 +1191,7 @@ type UnsignedChannelUpdateMsg = {
                 else
                     None
         member this.Serialize(ls: LightningWriterStream): unit = 
-            ls.Write(this.ChainHash, false)
+            ls.Write(this.ChainHash, true)
             ls.Write(this.ShortChannelId)
             ls.Write(this.Timestamp, false)
             ls.Write(this.MessageFlags)
@@ -1448,7 +1448,7 @@ type QueryShortChannelIdsMsg = {
     interface IQueryMsg
     interface ILightningSerializable<QueryShortChannelIdsMsg> with
         member this.Deserialize(ls: LightningReaderStream) =
-            this.ChainHash <- ls.ReadUInt256(false)
+            this.ChainHash <- ls.ReadUInt256(true)
             let shortIdsWithFlag = ls.ReadWithLen()
             this.ShortIdsEncodingType <- LanguagePrimitives.EnumOfValue<byte, EncodingType>(shortIdsWithFlag.[0])
             let shortIds =
@@ -1470,7 +1470,7 @@ type QueryShortChannelIdsMsg = {
                 this.ShortIds <- shortIds
                 this.TLVs <- tlvs
         member this.Serialize(ls) =
-            ls.Write(this.ChainHash, false)
+            ls.Write(this.ChainHash, true)
             let encodedIds = this.ShortIds |> Encoder.encodeShortChannelIds (this.ShortIdsEncodingType)
             [[|(byte)this.ShortIdsEncodingType|]; encodedIds]
             |> Array.concat
@@ -1486,14 +1486,14 @@ type ReplyShortChannelIdsEndMsg = {
     interface IQueryMsg
     interface ILightningSerializable<ReplyShortChannelIdsEndMsg> with
         member this.Deserialize(ls) =
-            this.ChainHash <- ls.ReadUInt256(false)
+            this.ChainHash <- ls.ReadUInt256(true)
             this.Complete <-
                 let b = ls.ReadByte()
                 if (b = 0uy) then false else
                 if (b = 1uy) then true else
                 raise <| FormatException(sprintf "reply_short_channel_ids has unknown byte in `complete` field %A" b)
         member this.Serialize(ls) =
-            ls.Write(this.ChainHash, false)
+            ls.Write(this.ChainHash, true)
             ls.Write(if (this.Complete) then 1uy else 0uy)
 [<CLIMutable>]
 type QueryChannelRangeMsg = {
@@ -1506,7 +1506,7 @@ type QueryChannelRangeMsg = {
     interface IQueryMsg
     interface ILightningSerializable<QueryChannelRangeMsg> with
         member this.Deserialize(ls) =
-            this.ChainHash <- ls.ReadUInt256(false)
+            this.ChainHash <- ls.ReadUInt256(true)
             this.FirstBlockNum <- ls.ReadUInt32(false) |> BlockHeight
             this.NumberOfBlocks <- ls.ReadUInt32(false)
             this.TLVs <-
@@ -1514,7 +1514,7 @@ type QueryChannelRangeMsg = {
                 r
                 |> Array.map(QueryChannelRangeTLV.FromGenericTLV)
         member this.Serialize(ls) =
-            ls.Write(this.ChainHash, false)
+            ls.Write(this.ChainHash, true)
             ls.Write(this.FirstBlockNum.Value, false)
             ls.Write(this.NumberOfBlocks, false)
             this.TLVs |> Array.map(fun tlv -> tlv.ToGenericTLV()) |> ls.WriteTLVStream
@@ -1533,7 +1533,7 @@ type ReplyChannelRangeMsg = {
     interface IQueryMsg
     interface ILightningSerializable<ReplyChannelRangeMsg> with
         member this.Deserialize(ls) =
-            this.ChainHash <- ls.ReadUInt256(false)
+            this.ChainHash <- ls.ReadUInt256(true)
             this.FirstBlockNum <- ls.ReadUInt32(false) |> BlockHeight
             this.NumOfBlocks <- ls.ReadUInt32(false)
             this.Complete <-
@@ -1548,7 +1548,7 @@ type ReplyChannelRangeMsg = {
             this.TLVs <-
                 ls.ReadTLVStream() |> Array.map(ReplyChannelRangeTLV.FromGenericTLV)
         member this.Serialize(ls) =
-            ls.Write(this.ChainHash, false)
+            ls.Write(this.ChainHash, true)
             ls.Write(this.FirstBlockNum.Value, false)
             ls.Write(this.NumOfBlocks, false)
             ls.Write(if this.Complete then 1uy else 0uy)
@@ -1568,11 +1568,11 @@ type GossipTimestampFilterMsg = {
     interface IQueryMsg
     interface ILightningSerializable<GossipTimestampFilterMsg> with
         member this.Deserialize(ls) =
-            this.ChainHash <- ls.ReadUInt256(false)
+            this.ChainHash <- ls.ReadUInt256(true)
             this.FirstTimestamp <- ls.ReadUInt32(false)
             this.TimestampRange <- ls.ReadUInt32(false)
         member this.Serialize(ls) =
-            ls.Write(this.ChainHash, false)
+            ls.Write(this.ChainHash, true)
             ls.Write(this.FirstTimestamp, false)
             ls.Write(this.TimestampRange, false)
             
