@@ -15,7 +15,16 @@
     <Compile Include="List.fs" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="4.7.0" />
-  </ItemGroup>
+  <Choose>
+    <When Condition="'$(Portability)'=='true'">
+      <ItemGroup>
+        <PackageReference Update="FSharp.Core" Version="4.0.1.1" />
+      </ItemGroup>
+    </When>
+    <Otherwise>
+      <ItemGroup>
+        <PackageReference Update="FSharp.Core" Version="4.7.0" />
+      </ItemGroup>
+    </Otherwise>
+  </Choose>
 </Project>
