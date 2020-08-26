@@ -101,7 +101,7 @@
   <Choose>
     <When Condition="'$(Portability)'=='true'">
       <ItemGroup>
-        <PackageReference Update="FSharp.Core" Version="4.0.1.1" />
+        <PackageReference Update="FSharp.Core" Version="4.0.0.1" />
       </ItemGroup>
     </When>
     <Otherwise>
