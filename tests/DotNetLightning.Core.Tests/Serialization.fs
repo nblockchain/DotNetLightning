@@ -12,6 +12,8 @@ open System
 open System.Collections
 open FsCheck
 
+open ResultUtils.Portability
+
 module SerializationTest =
 
     open Utils
@@ -797,9 +799,9 @@ module SerializationTest =
                     let ba = testCase |> parseBitArray
                     let result = Feature.validateFeatureGraph (ba)
                     if valid then
-                        Expect.isOk(result) (testCase)
+                        Expect.isOk(Result.ToFSharpCoreResult result) (testCase)
                     else
-                        Expect.isError(result) (testCase)
+                        Expect.isError(Result.ToFSharpCoreResult result) (testCase)
                     )
                 
             testCase "features compatibility (in int64)" <| fun _ ->

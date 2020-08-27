@@ -8,6 +8,8 @@ open System.Collections.Generic
 open System.Runtime.CompilerServices
 open System.Text
 
+open ResultUtils.Portability
+
 module Dict =
     let tryGetValue key (dict: IDictionary<_,_>)=
        match dict.TryGetValue key with

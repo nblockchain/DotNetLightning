@@ -7,6 +7,8 @@ open DotNetLightning.Core.Utils.Extensions
 open DotNetLightning.Utils
 open NBitcoin.Crypto
 
+open ResultUtils.Portability
+
 module private Helpers =
     let hex = DataEncoders.HexEncoder()   
     

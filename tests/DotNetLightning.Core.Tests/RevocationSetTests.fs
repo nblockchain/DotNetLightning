@@ -6,6 +6,8 @@ open ResultUtils
 open DotNetLightning.Utils
 open DotNetLightning.Crypto
 
+open ResultUtils.Portability
+
 [<Tests>]
 let tests =
     let insert (commitmentNumber: uint64)

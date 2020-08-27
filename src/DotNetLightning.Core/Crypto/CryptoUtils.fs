@@ -13,6 +13,8 @@ open NBitcoin.Secp256k1
 
 #endif
 
+open ResultUtils.Portability
+
 type CryptoError =
     | BadMac
     | InvalidErrorPacketLength of expected: int * actual: int

@@ -2,8 +2,6 @@ namespace DotNetLightning.Infrastructure
 
 open System
 
-open ResultUtils
-
 open DotNetLightning.Utils
 open DotNetLightning.Serialize.Msgs
 open DotNetLightning.Channel
@@ -13,6 +11,9 @@ open System.Collections.Generic
 open DotNetLightning.Transactions
 open DotNetLightning.Transactions
 open NBitcoin
+
+open ResultUtils
+open ResultUtils.Portability
 
 [<AutoOpen>]
 module SupportedTypes =
