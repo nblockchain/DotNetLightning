@@ -97,7 +97,7 @@
     <Compile Include="Routing\Router.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="4.7.0" />
+    <PackageReference Update="FSharp.Core" Version="4.7.2" />
     <PackageReference Include="NBitcoin" Version="5.0.54" />
     <PackageReference Condition="'$(Portability)' != 'true'" Include="NBitcoin.Secp256k1" Version="1.0.3" />
     <PackageReference Condition="'$(Portability)' == 'true'" Include="Portable.BouncyCastle" Version="1.8.5.2" />
