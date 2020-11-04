@@ -12,7 +12,7 @@
   <Choose>
     <When Condition="'$(Portability)'=='true'">
       <PropertyGroup>
-        <PackageId>DotNetLightning</PackageId>
+        <PackageId>DotNetLightning.Kiss</PackageId>
       </PropertyGroup>
     </When>
     <Otherwise>
