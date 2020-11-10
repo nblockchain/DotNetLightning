@@ -416,13 +416,19 @@ module internal Commitments =
             }
 
 module RemoteForceClose =
+    // The lightning spec specifies that commitment txs use version 2 bitcoin transactions.
+    let TxVersionNumberOfCommitmentTxs = 2u
+
     let check(thing: bool): Option<unit> =
-        if thing then Some () else None
+        if thing then
+            Some ()
+        else
+            None
 
     let tryGetObscuredCommitmentNumber (fundingOutPoint: OutPoint)
                                        (transaction: Transaction)
                                            : Option<ObscuredCommitmentNumber> = option {
-        do! check (transaction.Version = 2u)
+        do! check (transaction.Version = TxVersionNumberOfCommitmentTxs)
         let! txIn = Seq.tryExactlyOne transaction.Inputs
         do! check (fundingOutPoint = txIn.PrevOut)
         let! obscuredCommitmentNumber =
