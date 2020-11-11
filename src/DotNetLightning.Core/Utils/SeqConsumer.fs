@@ -1,13 +1,14 @@
 namespace DotNetLightning.Utils
 
-type SeqConsumer<'S, 'T> = {
-    Consume: seq<'S> -> Option<seq<'S> * 'T>
+type SeqConsumer<'SeqElement, 'T> = {
+    Consume: seq<'SeqElement> -> Option<seq<'SeqElement> * 'T>
 }
 
-type SeqConsumerBuilder<'S>() =
-    member __.Bind<'T0, 'T1>(seqConsumer0: SeqConsumer<'S, 'T0>, func: 'T0 -> SeqConsumer<'S, 'T1>)
-                                : SeqConsumer<'S, 'T1> = {
-        Consume = fun (sequence0: seq<'S>) ->
+type SeqConsumerBuilder<'SeqElement>() =
+    member __.Bind<'Arg, 'Return>(seqConsumer0: SeqConsumer<'SeqElement, 'Arg>,
+                                  func: 'Arg -> SeqConsumer<'SeqElement, 'Return>
+                                 ): SeqConsumer<'SeqElement, 'Return> = {
+        Consume = fun (sequence0: seq<'SeqElement>) ->
             match seqConsumer0.Consume sequence0 with
             | None -> None
             | Some (sequence1, value0) ->
@@ -16,36 +17,36 @@ type SeqConsumerBuilder<'S>() =
     }
 
     member __.Return<'T>(value: 'T)
-                            : SeqConsumer<'S, 'T> = {
-        Consume = fun (sequence: seq<'S>) -> Some (sequence, value)
+                            : SeqConsumer<'SeqElement, 'T> = {
+        Consume = fun (sequence: seq<'SeqElement>) -> Some (sequence, value)
     }
 
-    member __.ReturnFrom<'T>(seqConsumer: SeqConsumer<'S, 'T>): SeqConsumer<'S, 'T> =
+    member __.ReturnFrom<'T>(seqConsumer: SeqConsumer<'SeqElement, 'T>): SeqConsumer<'SeqElement, 'T> =
         seqConsumer
 
-    member __.Zero(): SeqConsumer<'S, unit> = {
-        Consume = fun (sequence: seq<'S>) -> Some (sequence, ())
+    member __.Zero(): SeqConsumer<'SeqElement, unit> = {
+        Consume = fun (sequence: seq<'SeqElement>) -> Some (sequence, ())
     }
 
 module SeqConsumer =
-    let seqConsumer<'S> = SeqConsumerBuilder<'S>()
+    let seqConsumer<'SeqElement> = SeqConsumerBuilder<'SeqElement>()
 
-    let NextInSeq<'S>(): SeqConsumer<'S, 'S> = {
-        Consume = fun (sequence: seq<'S>) ->
+    let NextInSeq<'SeqElement>(): SeqConsumer<'SeqElement, 'SeqElement> = {
+        Consume = fun (sequence: seq<'SeqElement>) ->
             match Seq.tryHead sequence with
             | None -> None
             | Some value -> Some (Seq.tail sequence, value)
     }
 
-    let AbortSeqConsumer<'S, 'T>(): SeqConsumer<'S, 'T> = {
-        Consume = fun (_sequence: seq<'S>) -> None
+    let AbortSeqConsumer<'SeqElement, 'T>(): SeqConsumer<'SeqElement, 'T> = {
+        Consume = fun (_sequence: seq<'SeqElement>) -> None
     }
 
     type ConsumeAllError =
         | SequenceEndedTooEarly
         | SequenceNotReadToEnd
 
-    let ConsumeAll<'S, 'T>(sequence: seq<'S>) (seqConsumer: SeqConsumer<'S, 'T>)
+    let ConsumeAll<'SeqElement, 'T>(sequence: seq<'SeqElement>) (seqConsumer: SeqConsumer<'SeqElement, 'T>)
                               : Result<'T, ConsumeAllError> =
         match seqConsumer.Consume sequence with
         | None -> Error SequenceEndedTooEarly
