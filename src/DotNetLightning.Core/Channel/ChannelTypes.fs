@@ -379,3 +379,24 @@ type ChannelState =
             | ErrFundingLost _
             | ErrFundingTimeOut _
             | ErrInformationLeak _ -> Abnormal
+
+        member this.CommitmentsOpt(): Option<Commitments> =
+            match this with
+            | WaitForInitInternal
+            | WaitForOpenChannel _
+            | WaitForAcceptChannel _
+            | WaitForFundingCreated _
+            | WaitForFundingSigned _ -> None
+            | WaitForFundingConfirmed state -> Some state.Commitments
+            | WaitForFundingLocked state -> Some state.Commitments
+            | Normal state -> Some state.Commitments
+            | Shutdown state -> Some state.Commitments
+            | Negotiating state -> Some state.Commitments
+            | Closing state -> Some state.Commitments
+            | Closed _
+            | Offline _
+            | Syncing _
+            | ErrFundingLost _
+            | ErrFundingTimeOut _
+            | ErrInformationLeak _ -> None
+
