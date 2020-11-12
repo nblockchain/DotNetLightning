@@ -574,7 +574,6 @@ module Channel =
                                                  RemoteCommit = theirNextCommit
                                                  RemoteNextCommitInfo = RemoteNextCommitInfo.Revoked msg.NextPerCommitmentPoint
                                                  RemotePerCommitmentSecrets = remotePerCommitmentSecrets }
-                    Console.WriteLine("WARNING: revocation is not implemented yet")
                     Ok [ WeAcceptedRevokeAndACK(commitments1) ]
 
         | ChannelState.Normal state, ChannelCommand.Close cmd ->

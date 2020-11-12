@@ -414,3 +414,179 @@ module internal Commitments =
                               OriginChannels = originChannels1 }
                 return [ WeAcceptedCommitmentSigned(nextMsg, nextCommitments) ;]
             }
+
+module RemoteForceClose =
+    // The lightning spec specifies that commitment txs use version 2 bitcoin transactions.
+    let TxVersionNumberOfCommitmentTxs = 2u
+
+    let check(thing: bool): Option<unit> =
+        if thing then
+            Some ()
+        else
+            None
+
+    let tryGetObscuredCommitmentNumber (fundingOutPoint: OutPoint)
+                                       (transaction: Transaction)
+                                           : Option<ObscuredCommitmentNumber> = option {
+        do! check (transaction.Version = TxVersionNumberOfCommitmentTxs)
+        let! txIn = Seq.tryExactlyOne transaction.Inputs
+        do! check (fundingOutPoint = txIn.PrevOut)
+        let! obscuredCommitmentNumber =
+            ObscuredCommitmentNumber.TryFromLockTimeAndSequence transaction.LockTime txIn.Sequence
+        return obscuredCommitmentNumber
+    }
+
+    let tryGetFundsFromRemoteCommitmentTx (commitments: Commitments)
+                                          (localChannelPrivKeys: ChannelPrivKeys)
+                                          (network: Network)
+                                          (transaction: Transaction)
+                                              : Option<TransactionBuilder> = option {
+        let! obscuredCommitmentNumber =
+            tryGetObscuredCommitmentNumber
+                commitments.FundingScriptCoin.Outpoint
+                transaction
+        let localChannelPubKeys = commitments.LocalParams.ChannelPubKeys
+        let remoteChannelPubKeys = commitments.RemoteParams.ChannelPubKeys
+        let commitmentNumber =
+            obscuredCommitmentNumber.Unobscure
+                false
+                localChannelPubKeys.PaymentBasepoint
+                remoteChannelPubKeys.PaymentBasepoint
+        let perCommitmentSecretOpt =
+            commitments.RemotePerCommitmentSecrets.GetPerCommitmentSecret commitmentNumber
+        let! perCommitmentPoint =
+            match perCommitmentSecretOpt with
+            | Some perCommitmentSecret -> Some <| perCommitmentSecret.PerCommitmentPoint()
+            | None ->
+                if commitments.RemoteCommit.Index = commitmentNumber then
+                    Some commitments.RemoteCommit.RemotePerCommitmentPoint
+                else
+                    None
+
+        let localCommitmentPubKeys =
+            perCommitmentPoint.DeriveCommitmentPubKeys localChannelPubKeys
+        let remoteCommitmentPubKeys =
+            perCommitmentPoint.DeriveCommitmentPubKeys remoteChannelPubKeys
+
+        let transactionBuilder = network.CreateTransactionBuilder()
+
+        let toRemoteScriptPubKey =
+            localCommitmentPubKeys.PaymentPubKey.RawPubKey().WitHash.ScriptPubKey
+        let toRemoteIndexOpt =
+            Seq.tryFindIndex
+                (fun (txOut: TxOut) -> txOut.ScriptPubKey = toRemoteScriptPubKey)
+                transaction.Outputs
+        let spentToRemoteOutput =
+            match toRemoteIndexOpt with
+            | None -> false
+            | Some toRemoteIndex ->
+                let localPaymentPrivKey =
+                    perCommitmentPoint.DerivePaymentPrivKey
+                        localChannelPrivKeys.PaymentBasepointSecret
+                (transactionBuilder.AddKeys (localPaymentPrivKey.RawKey()))
+                                   .AddCoins (Coin(transaction, uint32 toRemoteIndex))
+                |> ignore
+                true
+
+        let spentToLocalOutput =
+            match perCommitmentSecretOpt with
+            | None -> false
+            | Some perCommitmentSecret ->
+                let toLocalScriptPubKey =
+                    Scripts.toLocalDelayed
+                        localCommitmentPubKeys.RevocationPubKey
+                        commitments.RemoteParams.ToSelfDelay
+                        remoteCommitmentPubKeys.DelayedPaymentPubKey
+                let toLocalIndexOpt =
+                    let toLocalWitScriptPubKey = toLocalScriptPubKey.WitHash.ScriptPubKey
+                    Seq.tryFindIndex
+                        (fun (txOut: TxOut) -> txOut.ScriptPubKey = toLocalWitScriptPubKey)
+                        transaction.Outputs
+                match toLocalIndexOpt with
+                | None -> false
+                | Some toLocalIndex ->
+                    let revocationPrivKey =
+                        perCommitmentSecret.DeriveRevocationPrivKey
+                            localChannelPrivKeys.RevocationBasepointSecret
+                    transactionBuilder.Extensions.Add (CommitmentToLocalExtension())
+                    (transactionBuilder.AddKeys (revocationPrivKey.RawKey()))
+                                       .AddCoins
+                        (ScriptCoin(transaction, uint32 toLocalIndex, toLocalScriptPubKey))
+                    |> ignore
+                    true
+
+        do! check (spentToRemoteOutput || spentToLocalOutput)
+
+        return transactionBuilder
+    }
+
+    let tryGetFundsFromLocalCommitmentTx (commitments: Commitments)
+                                         (localChannelPrivKeys: ChannelPrivKeys)
+                                         (network: Network)
+                                         (transaction: Transaction)
+                                             : Option<TransactionBuilder> = option {
+        let! obscuredCommitmentNumber =
+            tryGetObscuredCommitmentNumber
+                commitments.FundingScriptCoin.Outpoint
+                transaction
+        let localChannelPubKeys = commitments.LocalParams.ChannelPubKeys
+        let remoteChannelPubKeys = commitments.RemoteParams.ChannelPubKeys
+        let commitmentNumber =
+            obscuredCommitmentNumber.Unobscure
+                true
+                localChannelPubKeys.PaymentBasepoint
+                remoteChannelPubKeys.PaymentBasepoint
+
+        let perCommitmentPoint =
+            localChannelPrivKeys.CommitmentSeed.DerivePerCommitmentPoint commitmentNumber
+        let localCommitmentPubKeys =
+            perCommitmentPoint.DeriveCommitmentPubKeys localChannelPubKeys
+        let remoteCommitmentPubKeys =
+            perCommitmentPoint.DeriveCommitmentPubKeys remoteChannelPubKeys
+
+        let transactionBuilder = network.CreateTransactionBuilder()
+
+        let toLocalScriptPubKey =
+            Scripts.toLocalDelayed
+                remoteCommitmentPubKeys.RevocationPubKey
+                commitments.LocalParams.ToSelfDelay
+                localCommitmentPubKeys.DelayedPaymentPubKey
+        let! toLocalIndex =
+            let toLocalWitScriptPubKey = toLocalScriptPubKey.WitHash.ScriptPubKey
+            Seq.tryFindIndex
+                (fun (txOut: TxOut) -> txOut.ScriptPubKey = toLocalWitScriptPubKey)
+                transaction.Outputs
+
+        let delayedPaymentPrivKey =
+            perCommitmentPoint.DeriveDelayedPaymentPrivKey
+                localChannelPrivKeys.DelayedPaymentBasepointSecret
+        transactionBuilder.Extensions.Add (CommitmentToLocalExtension())
+        (transactionBuilder.AddKeys (delayedPaymentPrivKey.RawKey()))
+                           .AddCoins
+            (ScriptCoin(transaction, uint32 toLocalIndex, toLocalScriptPubKey))
+        |> ignore
+
+        return transactionBuilder
+    }
+
+    let getFundsFromForceClosingTransaction (commitments: Commitments)
+                                            (localChannelPrivKeys: ChannelPrivKeys)
+                                            (network: Network)
+                                            (transaction: Transaction)
+                                                : Option<TransactionBuilder> =
+        let attemptsSeq = seq {
+            yield
+                tryGetFundsFromRemoteCommitmentTx
+                    commitments
+                    localChannelPrivKeys
+                    network
+                    transaction
+            yield
+                tryGetFundsFromLocalCommitmentTx
+                    commitments
+                    localChannelPrivKeys
+                    network
+                    transaction
+        }
+        Seq.tryPick (fun opt -> opt) attemptsSeq
+
