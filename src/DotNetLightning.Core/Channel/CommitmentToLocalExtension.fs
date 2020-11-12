@@ -79,6 +79,10 @@ type internal CommitmentToLocalExtension() =
                     failwith
                         "NBitcoin should not call this unless CanGenerateScriptSig returns true"
             let pubKey = keyRepo.FindKey scriptPubKey
+            // FindKey will return null if it can't find a key for
+            // scriptPubKey. If we can't find a valid key then this method
+            // should return null, indicating to NBitcoin that the sigScript
+            // could not be generated.
             match pubKey with
             | null -> null
             | _ when pubKey = parameters.RevocationPubKey.RawPubKey() ->
