@@ -1,5 +1,8 @@
 namespace DotNetLightning.Utils
 
+open ResultUtils
+open ResultUtils.Portability
+
 type SeqConsumer<'SeqElement, 'T> = {
     Consume: seq<'SeqElement> -> Option<seq<'SeqElement> * 'T>
 }

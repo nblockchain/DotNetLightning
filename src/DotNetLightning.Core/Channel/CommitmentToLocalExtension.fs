@@ -6,6 +6,9 @@ open DotNetLightning.Utils
 open DotNetLightning.Utils.SeqConsumer
 open DotNetLightning.Crypto
 
+open ResultUtils
+open ResultUtils.Portability
+
 type CommitmentToLocalParameters = {
     RevocationPubKey: RevocationPubKey
     ToSelfDelay: BlockHeightOffset16
