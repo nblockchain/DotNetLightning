@@ -285,7 +285,7 @@ type ChannelEvent =
     | WeAcceptedFailMalformedHTLC of origin: HTLCSource * msg: UpdateAddHTLCMsg * newCommitments: Commitments
 
     | WeAcceptedOperationUpdateFee of msg: UpdateFeeMsg  * nextCommitments: Commitments
-    | WeAcceptedUpdateFee of msg: UpdateFeeMsg 
+    | WeAcceptedUpdateFee of msg: UpdateFeeMsg * newCommitments: Commitments
 
     | WeAcceptedOperationSign of msg: CommitmentSignedMsg * nextCommitments: Commitments
     | WeAcceptedCommitmentSigned of msg: RevokeAndACKMsg * nextCommitments: Commitments
