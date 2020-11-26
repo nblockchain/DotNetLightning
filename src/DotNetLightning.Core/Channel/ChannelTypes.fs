@@ -1,5 +1,6 @@
 namespace DotNetLightning.Channel
 
+open DotNetLightning.Chain
 open DotNetLightning.Utils
 open DotNetLightning.Utils.Aether
 open DotNetLightning.DomainUtils.Types
@@ -7,6 +8,7 @@ open DotNetLightning.Serialization.Msgs
 open DotNetLightning.Transactions
 open DotNetLightning.Crypto
 open NBitcoin
+
 
 (*
     based on eclair's channel state management
@@ -257,17 +259,6 @@ module Data =
 /// The one that includes `Operation` in its name is the event which we are the initiator
 type ChannelEvent =
     // --- ln events ---
-    // --------- init fundee --------
-    | NewInboundChannelStarted of nextState: Data.WaitForOpenChannelData
-    | WeAcceptedOpenChannel of nextMsg: AcceptChannelMsg * nextState: Data.WaitForFundingCreatedData
-    | WeAcceptedFundingCreated of nextMsg: FundingSignedMsg * nextState: Data.WaitForFundingConfirmedData
-
-    // --------- init fender --------
-    | NewOutboundChannelStarted of nextMsg: OpenChannelMsg * nextState: Data.WaitForAcceptChannelData
-    | WeAcceptedAcceptChannel of fundingDestination: IDestination * fundingAmount: Money * nextState: Data.WaitForFundingTxData
-    | WeCreatedFundingTx of nextMsg: FundingCreatedMsg * nextState: Data.WaitForFundingSignedData
-    | WeAcceptedFundingSigned of txToPublish: FinalizedTx * nextState: Data.WaitForFundingConfirmedData
-
     /// -------- init both -----
     | FundingConfirmed of nextState: Data.WaitForFundingLockedData
     | TheySentFundingLocked of msg: FundingLockedMsg
@@ -334,12 +325,6 @@ type ChannelStatePhase =
     | Abnormal
 type ChannelState =
     /// Establishing
-    | WaitForInitInternal
-    | WaitForOpenChannel of WaitForOpenChannelData
-    | WaitForAcceptChannel of WaitForAcceptChannelData
-    | WaitForFundingTx of WaitForFundingTxData
-    | WaitForFundingCreated of WaitForFundingCreatedData
-    | WaitForFundingSigned of WaitForFundingSignedData
     | WaitForFundingConfirmed of WaitForFundingConfirmedData
     | WaitForFundingLocked of WaitForFundingLockedData
 
@@ -363,7 +348,6 @@ type ChannelState =
     with
         interface IState 
 
-        static member Zero = WaitForInitInternal
         static member Normal_: Prism<_, _> =
             (fun cc -> match cc with
                        | Normal s -> Some s
@@ -373,12 +357,6 @@ type ChannelState =
                          | _ -> cc )
         member this.ChannelId: Option<ChannelId> =
             match this with
-            | WaitForInitInternal
-            | WaitForOpenChannel _
-            | WaitForAcceptChannel _
-            | WaitForFundingTx _
-            | WaitForFundingCreated _ -> None
-            | WaitForFundingSigned data -> Some data.ChannelId
             | WaitForFundingConfirmed data -> Some data.ChannelId
             | WaitForFundingLocked data -> Some data.ChannelId
             | Normal data -> Some data.ChannelId
@@ -394,12 +372,6 @@ type ChannelState =
 
         member this.Phase =
             match this with
-            | WaitForInitInternal
-            | WaitForOpenChannel _ 
-            | WaitForAcceptChannel _
-            | WaitForFundingTx _
-            | WaitForFundingCreated _
-            | WaitForFundingSigned _
             | WaitForFundingConfirmed _
             | WaitForFundingLocked _ -> Opening
             | Normal _ -> ChannelStatePhase.Normal
@@ -415,12 +387,6 @@ type ChannelState =
 
         member this.Commitments: Option<Commitments> =
             match this with
-            | WaitForInitInternal
-            | WaitForOpenChannel _
-            | WaitForAcceptChannel _
-            | WaitForFundingTx _
-            | WaitForFundingCreated _
-            | WaitForFundingSigned _ -> None
             | WaitForFundingConfirmed data -> Some (data :> IHasCommitments).Commitments
             | WaitForFundingLocked data -> Some (data :> IHasCommitments).Commitments
             | Normal data -> Some (data :> IHasCommitments).Commitments
