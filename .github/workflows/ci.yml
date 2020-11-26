@@ -30,7 +30,7 @@ jobs:
         dotnet run --project tests/DotNetLightning.Core.Tests
     - name: Run other tests
       run: |
-        dotnet test
+        dotnet test --filter FullyQualifiedName\!~Macaroons
 
   build_with_fsharp_from_mono:
     runs-on: ubuntu-18.04
