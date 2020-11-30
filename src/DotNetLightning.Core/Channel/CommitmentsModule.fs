@@ -4,6 +4,7 @@ open NBitcoin
 
 open DotNetLightning.Utils
 open DotNetLightning.Transactions
+open DotNetLightning.Transactions.Transactions
 open DotNetLightning.Crypto
 open DotNetLightning.Chain
 open DotNetLightning.Serialization.Msgs
@@ -436,6 +437,109 @@ module RemoteForceClose =
             ObscuredCommitmentNumber.TryFromLockTimeAndSequence transaction.LockTime txIn.Sequence
         return obscuredCommitmentNumber
     }
+
+    let createPunishmentTx (perCommitmentSecret: PerCommitmentSecret)
+                           (commitments: Commitments)
+                           (localChannelPrivKeys: ChannelPrivKeys)
+                           (network: Network) 
+                               : TransactionBuilder =
+
+        let localChannelPubKeys = commitments.LocalParams.ChannelPubKeys
+        let remoteChannelPubKeys = commitments.RemoteParams.ChannelPubKeys
+
+        let perCommitmentPoint = perCommitmentSecret.PerCommitmentPoint()
+
+        let localCommitmentPubKeys =
+            perCommitmentPoint.DeriveCommitmentPubKeys localChannelPubKeys
+
+        let remoteCommitmentPubKeys =
+            perCommitmentPoint.DeriveCommitmentPubKeys remoteChannelPubKeys
+
+        let transactionBuilder = createTransactionBuilder network
+
+        let toRemoteScriptPubKey =
+            localCommitmentPubKeys
+                .PaymentPubKey
+                .RawPubKey()
+                .WitHash.ScriptPubKey
+
+        let toLocalScriptPubKey =
+            Scripts.toLocalDelayed
+                localCommitmentPubKeys.RevocationPubKey
+                commitments.RemoteParams.ToSelfDelay
+                remoteCommitmentPubKeys.DelayedPaymentPubKey
+
+        let toLocalWitScriptPubKey = toLocalScriptPubKey.WitHash.ScriptPubKey
+
+        let commitFee = commitTxFee 
+                            commitments.RemoteParams.DustLimitSatoshis 
+                            commitments.RemoteCommit.Spec
+
+        let (toLocalAmount, toRemoteAmount) =
+            if (commitments.LocalParams.IsFunder) then
+                (commitments.RemoteCommit.Spec.ToLocal.Satoshi
+                 |> Money.Satoshis),
+                (commitments.RemoteCommit.Spec.ToRemote.Satoshi
+                 |> Money.Satoshis) - commitFee
+            else
+                (commitments.RemoteCommit.Spec.ToLocal.Satoshi
+                 |> Money.Satoshis) - commitFee,
+                (commitments.RemoteCommit.Spec.ToRemote.Satoshi
+                 |> Money.Satoshis)
+
+        let outputs = 
+            seq {
+                if toLocalAmount > commitments.RemoteParams.DustLimitSatoshis then
+                    yield TxOut(toLocalAmount, toLocalWitScriptPubKey)
+
+                if toRemoteAmount > commitments.LocalParams.DustLimitSatoshis then
+                    yield TxOut(toRemoteAmount, toRemoteScriptPubKey)
+            }
+            |> Seq.sortWith TxOut.LexicographicCompare
+
+        let toRemoteIndex =
+            outputs
+            |> Seq.findIndex (fun out -> out.ScriptPubKey = toRemoteScriptPubKey)
+
+        let toRemoteTxOut: TxOut = 
+            outputs 
+            |> Seq.item toRemoteIndex
+
+        let localPaymentPrivKey =
+            perCommitmentPoint.DerivePaymentPrivKey localChannelPrivKeys.PaymentBasepointSecret
+
+        (transactionBuilder.AddKeys(localPaymentPrivKey.RawKey()))
+            .AddCoins(Coin
+                          (commitments.RemoteCommit.TxId.Value,
+                           toRemoteIndex |> uint32,
+                           toRemoteTxOut.Value,
+                           toRemoteTxOut.ScriptPubKey))
+        |> ignore
+
+        let toLocalIndex =
+            outputs
+            |> Seq.findIndex (fun out -> out.ScriptPubKey = toLocalWitScriptPubKey)
+
+        let toLocalTxOut: TxOut = 
+            outputs 
+            |> Seq.item toLocalIndex
+
+        let revocationPrivKey =
+            perCommitmentSecret.DeriveRevocationPrivKey localChannelPrivKeys.RevocationBasepointSecret
+
+        transactionBuilder.Extensions.Add(CommitmentToLocalExtension())
+        |> ignore
+
+        (transactionBuilder.AddKeys(revocationPrivKey.RawKey()))
+            .AddCoins(ScriptCoin
+                          (commitments.RemoteCommit.TxId.Value,
+                           toLocalIndex |> uint32,
+                           toLocalTxOut.Value,
+                           toLocalWitScriptPubKey,
+                           toLocalScriptPubKey))
+        |> ignore
+
+        transactionBuilder
 
     let tryGetFundsFromRemoteCommitmentTx (commitments: Commitments)
                                           (localChannelPrivKeys: ChannelPrivKeys)
