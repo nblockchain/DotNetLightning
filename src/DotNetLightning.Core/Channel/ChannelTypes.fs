@@ -343,14 +343,14 @@ type ChannelState =
             (fun v cc -> match cc with
                          | Normal _ -> Normal v
                          | _ -> cc )
-        member this.ChannelId: Option<ChannelId> =
+        member this.ChannelId: ChannelId =
             match this with
-            | WaitForFundingConfirmed data -> Some data.ChannelId
-            | WaitForFundingLocked data -> Some data.ChannelId
-            | Normal data -> Some data.ChannelId
-            | Shutdown data -> Some data.ChannelId
-            | Negotiating data -> Some data.ChannelId
-            | Closing data -> Some data.ChannelId
+            | WaitForFundingConfirmed data -> data.ChannelId
+            | WaitForFundingLocked data -> data.ChannelId
+            | Normal data -> data.ChannelId
+            | Shutdown data -> data.ChannelId
+            | Negotiating data -> data.ChannelId
+            | Closing data -> data.ChannelId
 
         member this.Phase =
             match this with
@@ -361,12 +361,12 @@ type ChannelState =
             | Negotiating _
             | Closing _ -> ChannelStatePhase.Closing
 
-        member this.Commitments: Option<Commitments> =
+        member this.Commitments: Commitments =
             match this with
-            | WaitForFundingConfirmed data -> Some (data :> IHasCommitments).Commitments
-            | WaitForFundingLocked data -> Some (data :> IHasCommitments).Commitments
-            | Normal data -> Some (data :> IHasCommitments).Commitments
-            | Shutdown data -> Some (data :> IHasCommitments).Commitments
-            | Negotiating data -> Some (data :> IHasCommitments).Commitments
-            | Closing data -> Some (data :> IHasCommitments).Commitments
+            | WaitForFundingConfirmed data -> (data :> IHasCommitments).Commitments
+            | WaitForFundingLocked data -> (data :> IHasCommitments).Commitments
+            | Normal data -> (data :> IHasCommitments).Commitments
+            | Shutdown data -> (data :> IHasCommitments).Commitments
+            | Negotiating data -> (data :> IHasCommitments).Commitments
+            | Closing data -> (data :> IHasCommitments).Commitments
 
