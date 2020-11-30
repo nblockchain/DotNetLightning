@@ -321,8 +321,6 @@ type ChannelStatePhase =
     | Opening
     | Normal
     | Closing
-    | Closed
-    | Abnormal
 type ChannelState =
     /// Establishing
     | WaitForFundingConfirmed of WaitForFundingConfirmedData
@@ -335,16 +333,6 @@ type ChannelState =
     | Shutdown of ShutdownData
     | Negotiating of NegotiatingData
     | Closing of ClosingData
-    | Closed of IChannelStateData
-
-    /// Abnormal
-    | Offline of IChannelStateData
-    | Syncing of IChannelStateData
-
-    /// Error
-    | ErrFundingLost of IChannelStateData
-    | ErrFundingTimeOut of IChannelStateData
-    | ErrInformationLeak of IChannelStateData
     with
         interface IState 
 
@@ -363,12 +351,6 @@ type ChannelState =
             | Shutdown data -> Some data.ChannelId
             | Negotiating data -> Some data.ChannelId
             | Closing data -> Some data.ChannelId
-            | Closed _
-            | Offline _
-            | Syncing _
-            | ErrFundingLost _
-            | ErrFundingTimeOut _
-            | ErrInformationLeak _ -> None
 
         member this.Phase =
             match this with
@@ -378,12 +360,6 @@ type ChannelState =
             | Shutdown _
             | Negotiating _
             | Closing _ -> ChannelStatePhase.Closing
-            | Closed _ -> ChannelStatePhase.Closed
-            | Offline _
-            | Syncing _
-            | ErrFundingLost _
-            | ErrFundingTimeOut _
-            | ErrInformationLeak _ -> Abnormal
 
         member this.Commitments: Option<Commitments> =
             match this with
@@ -393,10 +369,4 @@ type ChannelState =
             | Shutdown data -> Some (data :> IHasCommitments).Commitments
             | Negotiating data -> Some (data :> IHasCommitments).Commitments
             | Closing data -> Some (data :> IHasCommitments).Commitments
-            | Closed _
-            | Offline _
-            | Syncing _
-            | ErrFundingLost _
-            | ErrFundingTimeOut _
-            | ErrInformationLeak _ -> None
 
