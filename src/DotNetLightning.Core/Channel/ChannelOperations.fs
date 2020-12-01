@@ -98,7 +98,6 @@ type RemoteParams = {
     MaxAcceptedHTLCs: uint16
     ChannelPubKeys: ChannelPubKeys
     Features: FeatureBits
-    MinimumDepth: BlockHeightOffset32
 }
     with
         static member FromAcceptChannel nodeId (remoteInit: InitMsg) (msg: AcceptChannelMsg) =
@@ -119,10 +118,12 @@ type RemoteParams = {
                 MaxAcceptedHTLCs = msg.MaxAcceptedHTLCs
                 ChannelPubKeys = channelPubKeys
                 Features = remoteInit.Features
-                MinimumDepth = msg.MinimumDepth
             }
 
-        static member FromOpenChannel (nodeId) (remoteInit: InitMsg) (msg: OpenChannelMsg) (channelHandshakeConfig: ChannelHandshakeConfig) =
+        static member FromOpenChannel (nodeId: NodeId)
+                                      (remoteInit: InitMsg)
+                                      (msg: OpenChannelMsg)
+                                          : RemoteParams =
             let channelPubKeys = {
                 FundingPubKey = msg.FundingPubKey
                 RevocationBasepoint = msg.RevocationBasepoint
@@ -140,7 +141,6 @@ type RemoteParams = {
                 MaxAcceptedHTLCs = msg.MaxAcceptedHTLCs
                 ChannelPubKeys = channelPubKeys
                 Features = remoteInit.Features
-                MinimumDepth = channelHandshakeConfig.MinimumDepth
             }
 
 type InputInitFunder = {
