@@ -111,8 +111,10 @@ module internal Commitments =
             |> List.ofSeq
             |> List.sortBy(fun htlc -> htlc.Value.GetGlobalTransaction().Inputs.[htlc.WhichInput].PrevOut.N)
 
-        let checkUpdateFee (config: ChannelConfig) (msg: UpdateFeeMsg) (localFeeRate: FeeRatePerKw) =
-            let maxMismatch = config.ChannelOptions.MaxFeeRateMismatchRatio
+        let checkUpdateFee (channelOptions: ChannelOptions)
+                           (msg: UpdateFeeMsg)
+                           (localFeeRate: FeeRatePerKw) =
+            let maxMismatch = channelOptions.MaxFeeRateMismatchRatio
             UpdateFeeValidation.checkFeeDiffTooHigh (msg) (localFeeRate) (maxMismatch)
 
     let sendFulfill (op: OperationFulfillHTLC) (cm: Commitments) =
@@ -243,12 +245,15 @@ module internal Commitments =
                             [ WeAcceptedOperationUpdateFee(fee, c1) ]
                 }
 
-    let receiveFee (config: ChannelConfig) (localFeerate) (msg: UpdateFeeMsg) (cm: Commitments) =
+    let receiveFee (channelOptions: ChannelOptions)
+                   (localFeerate)
+                   (msg: UpdateFeeMsg)
+                   (cm: Commitments) =
         if (cm.LocalParams.IsFunder) then
             "Remote is Fundee so it cannot send update fee" |> apiMisuse
         else
             result {
-                do! Helpers.checkUpdateFee (config) (msg) (localFeerate)
+                do! Helpers.checkUpdateFee channelOptions msg localFeerate
                 let nextCommitments = cm.AddRemoteProposal(msg)
                 let! reduced =
                     nextCommitments.LocalCommit.Spec.Reduce(
