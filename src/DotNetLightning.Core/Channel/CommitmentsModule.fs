@@ -487,13 +487,18 @@ module RemoteForceClose =
                 (commitments.RemoteCommit.Spec.ToRemote.Satoshi
                  |> Money.Satoshis)
 
+        let toLocalTxOut = 
+            TxOut(toLocalAmount, toLocalWitScriptPubKey)
+        let toRemoteTxOut = 
+            TxOut(toRemoteAmount, toRemoteScriptPubKey)
+
         let outputs = 
             seq {
                 if toLocalAmount > commitments.RemoteParams.DustLimitSatoshis then
-                    yield TxOut(toLocalAmount, toLocalWitScriptPubKey)
+                    yield toLocalTxOut
 
                 if toRemoteAmount > commitments.LocalParams.DustLimitSatoshis then
-                    yield TxOut(toRemoteAmount, toRemoteScriptPubKey)
+                    yield toRemoteTxOut
             }
             |> Seq.sortWith TxOut.LexicographicCompare
 
@@ -504,9 +509,6 @@ module RemoteForceClose =
         match toRemoteIndexOpt with
         | None -> ()
         | Some toRemoteIndex ->
-            let toRemoteTxOut: TxOut = 
-                TxOut(toRemoteAmount, toRemoteScriptPubKey)
-
             let localPaymentPrivKey =
                 perCommitmentPoint.DerivePaymentPrivKey localChannelPrivKeys.PaymentBasepointSecret
 
@@ -526,9 +528,6 @@ module RemoteForceClose =
         match toLocalIndexOpt with
         | None -> ()
         | Some toLocalIndex -> 
-            let toLocalTxOut: TxOut = 
-                TxOut(toLocalAmount, toLocalWitScriptPubKey)
-
             let revocationPrivKey =
                 perCommitmentSecret.DeriveRevocationPrivKey localChannelPrivKeys.RevocationBasepointSecret
 
