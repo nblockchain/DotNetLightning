@@ -62,19 +62,6 @@ type OperationUpdateFee = {
     FeeRatePerKw: FeeRatePerKw
 }
 
-type OperationClose = private { ScriptPubKey: Script option }
-    with
-    static member Zero = { ScriptPubKey = None }
-    static member Create scriptPubKey =
-        result {
-            do! Scripts.checkIsValidFinalScriptPubKey scriptPubKey
-            return  { ScriptPubKey = Some scriptPubKey }
-        }
-
-module OperationClose =
-    let value cmdClose =
-        cmdClose.ScriptPubKey
-
 type LocalParams = {
     ChannelPubKeys: ChannelPubKeys
     DustLimitSatoshis: Money
@@ -84,7 +71,6 @@ type LocalParams = {
     ToSelfDelay: BlockHeightOffset16
     MaxAcceptedHTLCs: uint16
     IsFunder: bool
-    DefaultFinalScriptPubKey: Script
     Features: FeatureBits
 }
 
@@ -222,9 +208,9 @@ type ChannelCommand =
     | ApplyRevokeAndACK of RevokeAndACKMsg
 
     // close
-    | Close of OperationClose
+    | Close of ShutdownScriptPubKey
     | ApplyClosingSigned of ClosingSignedMsg
-    | RemoteShutdown of ShutdownMsg
+    | RemoteShutdown of ShutdownMsg * ShutdownScriptPubKey
 
     // else
     | ForceClose

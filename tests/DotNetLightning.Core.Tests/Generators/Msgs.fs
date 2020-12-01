@@ -98,7 +98,7 @@ let openChannelGen =
         <*> htlcBasepointGen
         <*> perCommitmentPointGen
         <*> Arb.generate<uint8>
-        <*> (Gen.optionOf pushScriptGen)
+        <*> (Gen.optionOf shutdownScriptPubKeyGen)
 
 let acceptChannelGen =
     let constructor = fun a b c d e f g h i j k l m n o ->
@@ -135,7 +135,7 @@ let acceptChannelGen =
         <*> delayedPaymentBasepointGen
         <*> htlcBasepointGen
         <*> perCommitmentPointGen
-        <*> (Gen.optionOf pushScriptGen)
+        <*> (Gen.optionOf shutdownScriptPubKeyGen)
 
 let fundingCreatedGen =
     let constructor = fun a b c d ->
@@ -169,7 +169,7 @@ let fundingLockedGen = gen {
 
 let shutdownGen = gen {
     let! c = ChannelId <!> uint256Gen
-    let! sc = pushScriptGen 
+    let! sc = shutdownScriptPubKeyGen 
     return { ChannelId = c; ScriptPubKey = sc }
 }
 

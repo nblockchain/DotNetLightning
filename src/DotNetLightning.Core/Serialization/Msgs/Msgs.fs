@@ -520,7 +520,7 @@ type OpenChannelMsg = {
     mutable HTLCBasepoint: HtlcBasepoint
     mutable FirstPerCommitmentPoint: PerCommitmentPoint
     mutable ChannelFlags: uint8
-    mutable ShutdownScriptPubKey: OptionalField<Script>
+    mutable ShutdownScriptPubKey: OptionalField<ShutdownScriptPubKey>
 }
 with
     interface IChannelMsg
@@ -546,7 +546,7 @@ with
             this.ChannelFlags <- ls.ReadUInt8()
             this.ShutdownScriptPubKey <-
                 if (ls.Position = ls.Length) then None else
-                ls.ReadWithLen() |> Script |> Some
+                ls.ReadShutdownScriptPubKey() |> Some
         member this.Serialize(ls) =
             ls.Write(this.Chainhash, true)
             ls.Write(this.TemporaryChannelId.Value, true)
@@ -584,7 +584,7 @@ type AcceptChannelMsg = {
     mutable DelayedPaymentBasepoint: DelayedPaymentBasepoint
     mutable HTLCBasepoint: HtlcBasepoint
     mutable FirstPerCommitmentPoint: PerCommitmentPoint
-    mutable ShutdownScriptPubKey: OptionalField<Script>
+    mutable ShutdownScriptPubKey: OptionalField<ShutdownScriptPubKey>
 }
 with
     interface IChannelMsg
@@ -606,7 +606,7 @@ with
             this.FirstPerCommitmentPoint <- ls.ReadPerCommitmentPoint()
             this.ShutdownScriptPubKey <-
                 if (ls.Position = ls.Length) then None else
-                ls.ReadWithLen() |> Script |> Some
+                ls.ReadShutdownScriptPubKey() |> Some
         member this.Serialize(ls) =
             ls.Write(this.TemporaryChannelId.Value.ToBytes())
             ls.Write(this.DustLimitSatoshis.Satoshi, false)
@@ -678,14 +678,14 @@ with
 [<CLIMutable>]
 type ShutdownMsg = {
     mutable ChannelId: ChannelId
-    mutable ScriptPubKey: Script
+    mutable ScriptPubKey: ShutdownScriptPubKey
 }
 with
     interface IChannelMsg
     interface ILightningSerializable<ShutdownMsg> with
         member this.Deserialize(ls) =
             this.ChannelId <- ls.ReadUInt256(true) |> ChannelId
-            this.ScriptPubKey <- ls.ReadScript()
+            this.ScriptPubKey <- ls.ReadShutdownScriptPubKey()
         member this.Serialize(ls) =
             ls.Write(this.ChannelId.Value.ToBytes())
             ls.WriteWithLen(this.ScriptPubKey.ToBytes())
