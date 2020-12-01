@@ -501,53 +501,49 @@ module RemoteForceClose =
             outputs
             |> Seq.tryFindIndex (fun out -> out.ScriptPubKey = toRemoteScriptPubKey)
 
-        let _spentToRemoteOutput = 
-            match toRemoteIndexOpt with
-                | None -> None
-                | Some toRemoteIndex ->
-                    let toRemoteTxOut: TxOut = 
-                        outputs 
-                        |> Seq.item toRemoteIndex
+        match toRemoteIndexOpt with
+            | None -> ()
+            | Some toRemoteIndex ->
+                let toRemoteTxOut: TxOut = 
+                    TxOut(toRemoteAmount, toRemoteScriptPubKey)
 
-                    let localPaymentPrivKey =
-                        perCommitmentPoint.DerivePaymentPrivKey localChannelPrivKeys.PaymentBasepointSecret
+                let localPaymentPrivKey =
+                    perCommitmentPoint.DerivePaymentPrivKey localChannelPrivKeys.PaymentBasepointSecret
 
-                    (transactionBuilder.AddKeys(localPaymentPrivKey.RawKey()))
-                        .AddCoins(Coin
-                                      (commitments.RemoteCommit.TxId.Value,
-                                       toRemoteIndex |> uint32,
-                                       toRemoteTxOut.Value,
-                                       toRemoteTxOut.ScriptPubKey)) 
-                        |> ignore
-                    Some ()
+                (transactionBuilder.AddKeys(localPaymentPrivKey.RawKey()))
+                    .AddCoins(Coin
+                                    (commitments.RemoteCommit.TxId.Value,
+                                    toRemoteIndex |> uint32,
+                                    toRemoteTxOut.Value,
+                                    toRemoteTxOut.ScriptPubKey)) 
+                    |> ignore
+                ()
 
         let toLocalIndexOpt =
             outputs
             |> Seq.tryFindIndex (fun out -> out.ScriptPubKey = toLocalWitScriptPubKey)
 
-        let _spentToLocalOutput = 
-            match toLocalIndexOpt with
-            | None -> None
-            | Some toLocalIndex -> 
-                let toLocalTxOut: TxOut = 
-                    outputs 
-                    |> Seq.item toLocalIndex
+        match toLocalIndexOpt with
+        | None -> ()
+        | Some toLocalIndex -> 
+            let toLocalTxOut: TxOut = 
+                TxOut(toLocalAmount, toLocalWitScriptPubKey)
 
-                let revocationPrivKey =
-                    perCommitmentSecret.DeriveRevocationPrivKey localChannelPrivKeys.RevocationBasepointSecret
+            let revocationPrivKey =
+                perCommitmentSecret.DeriveRevocationPrivKey localChannelPrivKeys.RevocationBasepointSecret
 
-                transactionBuilder.Extensions.Add(CommitmentToLocalExtension())
+            transactionBuilder.Extensions.Add(CommitmentToLocalExtension())
+            |> ignore
+
+            (transactionBuilder.AddKeys(revocationPrivKey.RawKey()))
+                .AddCoins(ScriptCoin
+                                (commitments.RemoteCommit.TxId.Value,
+                                toLocalIndex |> uint32,
+                                toLocalTxOut.Value,
+                                toLocalWitScriptPubKey,
+                                toLocalScriptPubKey))
                 |> ignore
-
-                (transactionBuilder.AddKeys(revocationPrivKey.RawKey()))
-                    .AddCoins(ScriptCoin
-                                  (commitments.RemoteCommit.TxId.Value,
-                                   toLocalIndex |> uint32,
-                                   toLocalTxOut.Value,
-                                   toLocalWitScriptPubKey,
-                                   toLocalScriptPubKey))
-                    |> ignore
-                Some ()
+            ()
 
         transactionBuilder
 
