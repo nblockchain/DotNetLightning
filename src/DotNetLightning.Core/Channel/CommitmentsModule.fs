@@ -122,8 +122,11 @@ module internal Commitments =
         | Some htlc when (cm.LocalChanges.Proposed |> Helpers.isAlreadySent htlc) ->
             htlc.HTLCId |> htlcAlreadySent
         | Some htlc when (htlc.PaymentHash = op.PaymentPreimage.Hash) ->
-            let msgToSend: UpdateFulfillHTLCMsg =
-                { ChannelId = cm.ChannelId; HTLCId = op.Id; PaymentPreimage = op.PaymentPreimage }
+            let msgToSend: UpdateFulfillHTLCMsg = {
+                ChannelId = cm.ChannelId()
+                HTLCId = op.Id
+                PaymentPreimage = op.PaymentPreimage
+            }
             let newCommitments = cm.AddLocalProposal(msgToSend)
             (msgToSend, newCommitments) |> Ok
         | Some htlc ->
@@ -159,9 +162,11 @@ module internal Commitments =
                 let reason =
                     op.Reason
                     |> function Choice1Of2 b -> Sphinx.forwardErrorPacket(b, ss) | Choice2Of2 f -> Sphinx.ErrorPacket.Create(ss, f)
-                let f = { UpdateFailHTLCMsg.ChannelId = cm.ChannelId
-                          HTLCId = op.Id
-                          Reason = { Data = reason } }
+                let f = {
+                    UpdateFailHTLCMsg.ChannelId = cm.ChannelId()
+                    HTLCId = op.Id
+                    Reason = { Data = reason }
+                }
                 let nextComitments = cm.AddLocalProposal(f)
                 [ WeAcceptedOperationFailHTLC(f, nextComitments) ]
                 |> Ok
@@ -193,10 +198,12 @@ module internal Commitments =
             | Some htlc when (cm.LocalChanges.Proposed |> Helpers.isAlreadySent htlc) ->
                 htlc.HTLCId |> htlcAlreadySent
             | Some _htlc ->
-                let msg = { UpdateFailMalformedHTLCMsg.ChannelId = cm.ChannelId
-                            HTLCId = op.Id
-                            Sha256OfOnion = op.Sha256OfOnion
-                            FailureCode = op.FailureCode }
+                let msg = {
+                    UpdateFailMalformedHTLCMsg.ChannelId = cm.ChannelId()
+                    HTLCId = op.Id
+                    Sha256OfOnion = op.Sha256OfOnion
+                    FailureCode = op.FailureCode
+                }
                 let nextCommitments = cm.AddLocalProposal(msg)
                 [ WeAcceptedOperationFailMalformedHTLC(msg, nextCommitments) ]
                 |> Ok
@@ -225,8 +232,10 @@ module internal Commitments =
             if (not cm.LocalParams.IsFunder) then
                 "Local is Fundee so it cannot send update fee" |> apiMisuse
             else
-                let fee = { UpdateFeeMsg.ChannelId = cm.ChannelId
-                            FeeRatePerKw = op.FeeRatePerKw }
+                let fee = {
+                    UpdateFeeMsg.ChannelId = cm.ChannelId()
+                    FeeRatePerKw = op.FeeRatePerKw
+                }
                 let c1 = cm.AddLocalProposal(fee)
                 result {
                     let! reduced =
@@ -294,9 +303,11 @@ module internal Commitments =
                             >> fst
                             >> (fun txSig -> txSig.Signature)
                             )
-                let msg = { CommitmentSignedMsg.ChannelId = cm.ChannelId
-                            Signature = !> signature.Signature
-                            HTLCSignatures = htlcSigs |> List.map (!>) }
+                let msg = {
+                    CommitmentSignedMsg.ChannelId = cm.ChannelId()
+                    Signature = !> signature.Signature
+                    HTLCSignatures = htlcSigs |> List.map (!>)
+                }
                 let nextCommitments =
                     let nextRemoteCommitInfo = {
                         WaitingForRevocation.NextRemoteCommit = {
@@ -397,9 +408,11 @@ module internal Commitments =
                             (cm.LocalCommit.Index.NextCommitment().NextCommitment())
                     perCommitmentSecret.PerCommitmentPoint()
 
-                let nextMsg = { RevokeAndACKMsg.ChannelId = cm.ChannelId
-                                PerCommitmentSecret = localPerCommitmentSecret
-                                NextPerCommitmentPoint = localNextPerCommitmentPoint }
+                let nextMsg = {
+                    RevokeAndACKMsg.ChannelId = cm.ChannelId()
+                    PerCommitmentSecret = localPerCommitmentSecret
+                    NextPerCommitmentPoint = localNextPerCommitmentPoint
+                }
                 
                 let nextCommitments =
                     let localCommit1 = { LocalCommit.Index = cm.LocalCommit.Index.NextCommitment()
