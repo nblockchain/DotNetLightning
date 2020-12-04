@@ -44,7 +44,8 @@ type ChannelWaitingForFundingSigned = {
             let sigPairs = seq [ remoteSigPairOfLocalTx; ]
             Transactions.checkTxFinalized signedLocalCommitTx self.LocalCommitTx.WhichInput sigPairs |> expectTransactionError
         let commitments = {
-            Commitments.LocalParams = self.LocalParams
+            IsFunder = true
+            LocalParams = self.LocalParams
             RemoteParams = self.RemoteParams
             ChannelFlags = self.ChannelFlags
             FundingScriptCoin =
@@ -127,6 +128,7 @@ and ChannelWaitingForFundingCreated = {
                 self.ChannelPrivKeys.CommitmentSeed.DerivePerCommitmentPoint
                     CommitmentNumber.FirstCommitment
             ChannelHelpers.makeFirstCommitTxs
+                false
                 self.LocalParams
                 self.RemoteParams
                 self.FundingSatoshis
@@ -149,6 +151,7 @@ and ChannelWaitingForFundingCreated = {
         let localSigOfRemoteCommit, _ =
             self.ChannelPrivKeys.SignWithFundingPrivKey remoteCommitTx.Value
         let commitments = {
+            IsFunder = false
             LocalParams = self.LocalParams
             RemoteParams = self.RemoteParams
             ChannelFlags = self.ChannelFlags
@@ -233,22 +236,24 @@ and ChannelWaitingForFundingTx = {
     member self.CreateFundingTx (fundingTx: FinalizedTx)
                                 (outIndex: TxOutIndex)
                                     : Result<FundingCreatedMsg * ChannelWaitingForFundingSigned, ChannelError> = result {
-        let remoteParams = RemoteParams.FromAcceptChannel self.RemoteNodeId (self.RemoteInit) self.LastReceived
+        let remoteParams = RemoteParams.FromAcceptChannel self.RemoteInit self.LastReceived
         let localParams = self.LocalParams
         let commitmentSpec = CommitmentSpec.Create (self.FundingSatoshis.ToLNMoney() - self.PushMSat) self.PushMSat self.FundingTxFeeRatePerKw
         let commitmentSeed = self.ChannelPrivKeys.CommitmentSeed
         let fundingTxId = fundingTx.Value.GetTxId()
         let! (_localSpec, localCommitTx, remoteSpec, remoteCommitTx) =
-            ChannelHelpers.makeFirstCommitTxs localParams
-                                       remoteParams
-                                       self.FundingSatoshis
-                                       self.PushMSat
-                                       self.InitFeeRatePerKw
-                                       outIndex
-                                       fundingTxId
-                                       (commitmentSeed.DerivePerCommitmentPoint CommitmentNumber.FirstCommitment)
-                                       self.LastReceived.FirstPerCommitmentPoint
-                                       self.Network
+            ChannelHelpers.makeFirstCommitTxs
+                true
+                localParams
+                remoteParams
+                self.FundingSatoshis
+                self.PushMSat
+                self.InitFeeRatePerKw
+                outIndex
+                fundingTxId
+                (commitmentSeed.DerivePerCommitmentPoint CommitmentNumber.FirstCommitment)
+                self.LastReceived.FirstPerCommitmentPoint
+                self.Network
         let localSigOfRemoteCommit, _ =
             self.ChannelPrivKeys.SignWithFundingPrivKey remoteCommitTx.Value
         let nextMsg: FundingCreatedMsg = {
@@ -446,7 +451,7 @@ and Channel = {
                     FirstPerCommitmentPoint = firstPerCommitmentPoint
                     ShutdownScriptPubKey = shutdownScriptPubKey
                 }
-                let remoteParams = RemoteParams.FromOpenChannel remoteNodeId remoteInit openChannelMsg
+                let remoteParams = RemoteParams.FromOpenChannel remoteInit openChannelMsg
                 let channelPrivKeys = nodeMasterPrivKey.ChannelPrivKeys channelIndex
                 let nodeSecret = nodeMasterPrivKey.NodeSecret()
                 let channelWaitingForFundingCreated = {
@@ -493,7 +498,7 @@ module Channel =
                           ) =
             let dustLimitSatoshis = Money.Max(cm.LocalParams.DustLimitSatoshis, cm.RemoteParams.DustLimitSatoshis)
             result {
-                let! closingTx = Transactions.makeClosingTx (cm.FundingScriptCoin) (localSpk) (remoteSpk) (cm.LocalParams.IsFunder) (dustLimitSatoshis) (closingFee) (cm.LocalCommit.Spec) network
+                let! closingTx = Transactions.makeClosingTx (cm.FundingScriptCoin) (localSpk) (remoteSpk) (cm.IsFunder) (dustLimitSatoshis) (closingFee) (cm.LocalCommit.Spec) network
                 let localSignature, psbtUpdated = channelPrivKeys.SignWithFundingPrivKey closingTx.Value
                 let msg: ClosingSignedMsg = {
                     ChannelId = cm.ChannelId()
@@ -509,7 +514,7 @@ module Channel =
                             (feeEst: IFeeEstimator)
                             (network: Network) =
             result {
-                let! dummyClosingTx = Transactions.makeClosingTx cm.FundingScriptCoin localSpk remoteSpk cm.LocalParams.IsFunder Money.Zero Money.Zero cm.LocalCommit.Spec network
+                let! dummyClosingTx = Transactions.makeClosingTx cm.FundingScriptCoin localSpk remoteSpk cm.IsFunder Money.Zero Money.Zero cm.LocalCommit.Spec network
                 let tx = dummyClosingTx.Value.GetGlobalTransaction()
                 tx.Inputs.[0].WitScript <-
                     let witness = seq [ dummySig.ToBytes(); dummySig.ToBytes(); dummyClosingTx.Value.Inputs.[0].WitnessScript.ToBytes() ]
@@ -631,7 +636,7 @@ module Channel =
         | WaitForFundingLocked state, ApplyFundingLocked msg ->
             if (state.HaveWeSentFundingLocked) then
                 let initialChannelUpdate =
-                    let feeBase = ChannelHelpers.getOurFeeBaseMSat cs.FeeEstimator state.InitialFeeRatePerKw cs.Commitments.LocalParams.IsFunder
+                    let feeBase = ChannelHelpers.getOurFeeBaseMSat cs.FeeEstimator state.InitialFeeRatePerKw cs.Commitments.IsFunder
                     ChannelHelpers.makeChannelUpdate (cs.Network.Consensus.HashGenesisBlock,
                                                cs.NodeSecret,
                                                cs.RemoteNodeId,
@@ -890,7 +895,7 @@ module Channel =
                             (localShutdown, [ localShutdown ])
                     if (cm.HasNoPendingHTLCs()) then
                         // we have to send first closing_signed msg iif we are the funder
-                        if (cm.LocalParams.IsFunder) then
+                        if (cm.IsFunder) then
                             let! (closingTx, closingSignedMsg) =
                                 Closing.makeFirstClosingTx (cs.ChannelPrivKeys,
                                                             cm,
@@ -1070,7 +1075,7 @@ module Channel =
         | TheySentFundingLocked msg, WaitForFundingConfirmed s ->
             { c with State = WaitForFundingConfirmed({ s with Deferred = Some(msg) }) }
         | TheySentFundingLocked _msg, WaitForFundingLocked s ->
-            let feeBase = ChannelHelpers.getOurFeeBaseMSat c.FeeEstimator s.InitialFeeRatePerKw c.Commitments.LocalParams.IsFunder
+            let feeBase = ChannelHelpers.getOurFeeBaseMSat c.FeeEstimator s.InitialFeeRatePerKw c.Commitments.IsFunder
             let channelUpdate = ChannelHelpers.makeChannelUpdate (c.Network.Consensus.HashGenesisBlock,
                                                            c.NodeSecret,
                                                            c.RemoteNodeId,

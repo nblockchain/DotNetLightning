@@ -120,6 +120,7 @@ type Commitments = {
     RemoteParams: RemoteParams
     ChannelFlags: uint8
     FundingScriptCoin: ScriptCoin
+    IsFunder: bool
     LocalCommit: LocalCommit
     RemoteCommit: RemoteCommit
     LocalChanges: LocalChanges
@@ -207,7 +208,7 @@ type Commitments = {
                         err
                 | Ok reduced -> reduced
             let fees =
-                if this.LocalParams.IsFunder then
+                if this.IsFunder then
                     Transactions.commitTxFee this.RemoteParams.DustLimitSatoshis reduced
                     |> LNMoney.FromMoney
                 else
