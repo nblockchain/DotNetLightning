@@ -630,7 +630,6 @@ module Channel =
                 }
                 let nextState = {
                     ShortChannelId = shortChannelId
-                    OurMessage = msgToSend
                     TheirMessage = None
                     HaveWeSentFundingLocked = false
                 }
@@ -1119,8 +1118,8 @@ module Channel =
                 RemoteShutdown = None
             }
             { c with State = ChannelState.Normal nextState }
-        | WeSentFundingLocked msg, WaitForFundingLocked prevState ->
-            { c with State = WaitForFundingLocked { prevState with OurMessage = msg; HaveWeSentFundingLocked = true } }
+        | WeSentFundingLocked _msg, WaitForFundingLocked prevState ->
+            { c with State = WaitForFundingLocked { prevState with HaveWeSentFundingLocked = true } }
 
         // ----- normal operation --------
         | WeAcceptedOperationMonoHopUnidirectionalPayment(_, newCommitments), ChannelState.Normal _normalData ->
