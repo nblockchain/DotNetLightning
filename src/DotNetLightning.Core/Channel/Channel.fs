@@ -85,7 +85,6 @@ type ChannelWaitingForFundingSigned = {
         }
         let nextState = WaitForFundingConfirmed {
             Deferred = None
-            LastSent = Choice1Of2 self.LastSent
             InitialFeeRatePerKw = self.InitialFeeRatePerKw
         }
         let channel = {
@@ -201,7 +200,6 @@ and ChannelWaitingForFundingCreated = {
         }
         let nextState = WaitForFundingConfirmed {
             Deferred = None
-            LastSent = msgToSend |> Choice2Of2
             InitialFeeRatePerKw = self.InitialFeeRatePerKw
         }
         let channel = {
