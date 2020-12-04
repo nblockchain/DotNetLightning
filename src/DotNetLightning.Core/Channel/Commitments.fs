@@ -128,6 +128,7 @@ type Commitments = {
     LocalNextHTLCId: HTLCId
     RemoteNextHTLCId: HTLCId
     OriginChannels: Map<HTLCId, HTLCSource>
+    RemoteChannelPubKeys: ChannelPubKeys
     RemoteNextCommitInfo: RemoteNextCommitInfo
     RemotePerCommitmentSecrets: PerCommitmentSecretStore
 }
