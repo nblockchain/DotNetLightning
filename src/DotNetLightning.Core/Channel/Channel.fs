@@ -630,7 +630,6 @@ module Channel =
                 }
                 let nextState = {
                     ShortChannelId = shortChannelId
-                    TheirMessage = None
                     HaveWeSentFundingLocked = false
                 }
                 
