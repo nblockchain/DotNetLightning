@@ -323,7 +323,6 @@ module internal Commitments =
                                 RemotePerCommitmentPoint = remoteNextPerCommitmentPoint
                                 TxId = remoteCommitTx.GetTxId()
                         }
-                        Sent = msg
                         SentAfterLocalCommitmentIndex = cm.LocalCommit.Index
                         ReSignASAP = false
                     }
