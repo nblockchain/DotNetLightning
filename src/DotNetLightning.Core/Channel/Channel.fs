@@ -73,13 +73,6 @@ type ChannelWaitingForFundingSigned = {
             LocalNextHTLCId = HTLCId.Zero
             RemoteNextHTLCId = HTLCId.Zero
             OriginChannels = Map.empty
-            // we will receive their next per-commitment point in the next msg, so we temporarily put a random byte array
-            RemoteNextCommitInfo =
-                let dummyBytes = DataEncoders.HexEncoder().DecodeData("0101010101010101010101010101010101010101010101010101010101010101")
-                let dummyKey = new Key(dummyBytes)
-                dummyKey.PubKey
-                |> PerCommitmentPoint
-                |> RemoteNextCommitInfo.Revoked
             RemotePerCommitmentSecrets = PerCommitmentSecretStore()
         }
         let nextState = WaitForFundingConfirmed {
@@ -183,12 +176,6 @@ and ChannelWaitingForFundingCreated = {
             LocalNextHTLCId = HTLCId.Zero
             RemoteNextHTLCId = HTLCId.Zero
             OriginChannels = Map.empty
-            RemoteNextCommitInfo =
-                let dummyBytes = DataEncoders.HexEncoder().DecodeData("0101010101010101010101010101010101010101010101010101010101010101")
-                let dummyKey = new Key(dummyBytes)
-                dummyKey.PubKey
-                |> PerCommitmentPoint
-                |> RemoteNextCommitInfo.Revoked
             RemotePerCommitmentSecrets = PerCommitmentSecretStore()
         }
         let channelId = commitments.ChannelId()
@@ -552,13 +539,16 @@ module Channel =
             ((localClosingFee.Satoshi + remoteClosingFee.Satoshi) / 4L) * 2L
             |> Money.Satoshis
 
-        let handleMutualClose (closingTx: FinalizedTx, d: NegotiatingData) =
+        let handleMutualClose (closingTx: FinalizedTx)
+                              (d: NegotiatingData)
+                              (remoteNextCommitInfo: RemoteNextCommitInfo) =
             let nextData =
                 ClosingData.Create
                     None
                     DateTime.Now
                     (d.ClosingTxProposed |> List.collect id |> List.map (fun tx -> tx.UnsignedTx))
                     closingTx
+                    remoteNextCommitInfo
             [ MutualClosePerformed (closingTx, nextData) ]
             |> Ok
 
@@ -660,25 +650,21 @@ module Channel =
                                            cs.ChannelOptions.FeeProportionalMillionths,
                                            true,
                                            None)
-            let nextCommitments = {
-                cs.Commitments with
-                    RemoteNextCommitInfo =
-                        RemoteNextCommitInfo.Revoked(msg.NextPerCommitmentPoint)
-            }
             let nextState = {
                 ShortChannelId = state.ShortChannelId
                 ChannelAnnouncement = None
                 ChannelUpdate = initialChannelUpdate
                 LocalShutdown = None
                 RemoteShutdown = None
+                RemoteNextCommitInfo = RemoteNextCommitInfo.Revoked(msg.NextPerCommitmentPoint)
             }
-            [ BothFundingLocked(nextState, nextCommitments) ] |> Ok
+            [ BothFundingLocked(nextState) ] |> Ok
 
         // ---------- normal operation ---------
         | ChannelState.Normal state, MonoHopUnidirectionalPayment op when state.LocalShutdown.IsSome || state.RemoteShutdown.IsSome ->
             sprintf "Could not send mono-hop unidirectional payment %A since shutdown is already in progress." op
             |> apiMisuse
-        | ChannelState.Normal _state, MonoHopUnidirectionalPayment op ->
+        | ChannelState.Normal state, MonoHopUnidirectionalPayment op ->
             result {
                 let payment: MonoHopUnidirectionalPaymentMsg = {
                     ChannelId = cs.Commitments.ChannelId()
@@ -687,7 +673,7 @@ module Channel =
                 let commitments1 = cs.Commitments.AddLocalProposal(payment)
 
                 let remoteCommit1 =
-                    match commitments1.RemoteNextCommitInfo with
+                    match state.RemoteNextCommitInfo with
                     | RemoteNextCommitInfo.Waiting info -> info.NextRemoteCommit
                     | RemoteNextCommitInfo.Revoked _info -> commitments1.RemoteCommit
                 let! reduced = remoteCommit1.Spec.Reduce(commitments1.RemoteChanges.ACKed, commitments1.LocalChanges.Proposed) |> expectTransactionError
@@ -704,7 +690,7 @@ module Channel =
         | ChannelState.Normal state, AddHTLC op when state.LocalShutdown.IsSome || state.RemoteShutdown.IsSome ->
             sprintf "Could not add new HTLC %A since shutdown is already in progress." op
             |> apiMisuse
-        | ChannelState.Normal _state, AddHTLC op ->
+        | ChannelState.Normal state, AddHTLC op ->
             result {
                 do! Validation.checkOperationAddHTLC cs.Commitments op
                 let add: UpdateAddHTLCMsg = {
@@ -731,7 +717,7 @@ module Channel =
 
                 // we need to base the next current commitment on the last sig we sent, even if we didn't yet receive their revocation
                 let remoteCommit1 =
-                    match commitments1.RemoteNextCommitInfo with
+                    match state.RemoteNextCommitInfo with
                     | RemoteNextCommitInfo.Waiting info -> info.NextRemoteCommit
                     | RemoteNextCommitInfo.Revoked _info -> commitments1.RemoteCommit
                 let! reduced = remoteCommit1.Spec.Reduce(commitments1.RemoteChanges.ACKed, commitments1.LocalChanges.Proposed) |> expectTransactionError
@@ -754,26 +740,26 @@ module Channel =
                 return [ WeAcceptedUpdateAddHTLC commitments1 ]
             }
 
-        | ChannelState.Normal _state, FulfillHTLC cmd ->
+        | ChannelState.Normal state, FulfillHTLC cmd ->
             result {
-                let! t = cs.Commitments |> Commitments.sendFulfill (cmd)
+                let! t = Commitments.sendFulfill cmd cs.Commitments state.RemoteNextCommitInfo
                 return [ WeAcceptedOperationFulfillHTLC t ]
             }
 
-        | ChannelState.Normal _state, ChannelCommand.ApplyUpdateFulfillHTLC msg ->
-            cs.Commitments |> Commitments.receiveFulfill msg
+        | ChannelState.Normal state, ChannelCommand.ApplyUpdateFulfillHTLC msg ->
+            Commitments.receiveFulfill msg cs.Commitments state.RemoteNextCommitInfo
 
-        | ChannelState.Normal _state, FailHTLC op ->
-            cs.Commitments |> Commitments.sendFail cs.NodeSecret op
+        | ChannelState.Normal state, FailHTLC op ->
+            Commitments.sendFail cs.NodeSecret op cs.Commitments state.RemoteNextCommitInfo
 
-        | ChannelState.Normal _state, FailMalformedHTLC op ->
-            cs.Commitments |> Commitments.sendFailMalformed op
+        | ChannelState.Normal state, FailMalformedHTLC op ->
+            Commitments.sendFailMalformed op cs.Commitments state.RemoteNextCommitInfo
 
-        | ChannelState.Normal _state, ApplyUpdateFailHTLC msg ->
-            cs.Commitments |> Commitments.receiveFail msg
+        | ChannelState.Normal state, ApplyUpdateFailHTLC msg ->
+            Commitments.receiveFail msg cs.Commitments state.RemoteNextCommitInfo
 
-        | ChannelState.Normal _state, ApplyUpdateFailMalformedHTLC msg ->
-            cs.Commitments |> Commitments.receiveFailMalformed msg
+        | ChannelState.Normal state, ApplyUpdateFailMalformedHTLC msg ->
+            Commitments.receiveFailMalformed msg cs.Commitments state.RemoteNextCommitInfo
 
         | ChannelState.Normal _state, UpdateFee op ->
             cs.Commitments |> Commitments.sendFee op
@@ -781,15 +767,15 @@ module Channel =
             let localFeerate = cs.FeeEstimator.GetEstSatPer1000Weight(ConfirmationTarget.HighPriority)
             cs.Commitments |> Commitments.receiveFee cs.ChannelOptions localFeerate msg
 
-        | ChannelState.Normal _state, SignCommitment ->
+        | ChannelState.Normal state, SignCommitment ->
             let cm = cs.Commitments
             result {
-                match cm.RemoteNextCommitInfo with
+                match state.RemoteNextCommitInfo with
                 | _ when (cm.LocalHasChanges() |> not) ->
                     // Ignore SignCommitment Command (nothing to sign)
                     return []
                 | RemoteNextCommitInfo.Revoked _ ->
-                    return! cm |> Commitments.sendCommit cs.ChannelPrivKeys (cs.Network)
+                    return! Commitments.sendCommit cs.ChannelPrivKeys cs.Network cm state.RemoteNextCommitInfo
                 | RemoteNextCommitInfo.Waiting _ ->
                     // Already in the process of signing
                     return []
@@ -798,9 +784,9 @@ module Channel =
         | ChannelState.Normal _state, ApplyCommitmentSigned msg ->
             cs.Commitments |> Commitments.receiveCommit cs.ChannelPrivKeys msg cs.Network
 
-        | ChannelState.Normal _state, ApplyRevokeAndACK msg ->
+        | ChannelState.Normal state, ApplyRevokeAndACK msg ->
             let cm = cs.Commitments
-            match cm.RemoteNextCommitInfo with
+            match state.RemoteNextCommitInfo with
             | RemoteNextCommitInfo.Waiting _ when (msg.PerCommitmentSecret.PerCommitmentPoint() <> cm.RemoteCommit.RemotePerCommitmentPoint) ->
                 let errorMsg = sprintf "Invalid revoke_and_ack %A; must be %A" msg.PerCommitmentSecret cm.RemoteCommit.RemotePerCommitmentPoint
                 invalidRevokeAndACK msg errorMsg
@@ -815,12 +801,21 @@ module Channel =
                 match remotePerCommitmentSecretsOpt with
                 | Error err -> invalidRevokeAndACK msg err.Message
                 | Ok remotePerCommitmentSecrets ->
-                    let commitments1 = { cm with LocalChanges = { cm.LocalChanges with Signed = []; ACKed = cm.LocalChanges.ACKed @ cm.LocalChanges.Signed }
-                                                 RemoteChanges = { cm.RemoteChanges with Signed = [] }
-                                                 RemoteCommit = theirNextCommit
-                                                 RemoteNextCommitInfo = RemoteNextCommitInfo.Revoked msg.NextPerCommitmentPoint
-                                                 RemotePerCommitmentSecrets = remotePerCommitmentSecrets }
-                    Ok [ WeAcceptedRevokeAndACK(commitments1) ]
+                    let commitments1 = {
+                        cm with
+                            LocalChanges = {
+                                cm.LocalChanges with
+                                    Signed = [];
+                                    ACKed = cm.LocalChanges.ACKed @ cm.LocalChanges.Signed
+                            }
+                            RemoteChanges = {
+                                cm.RemoteChanges with
+                                    Signed = []
+                            }
+                            RemoteCommit = theirNextCommit
+                            RemotePerCommitmentSecrets = remotePerCommitmentSecrets
+                    }
+                    Ok [ WeAcceptedRevokeAndACK(commitments1, msg.NextPerCommitmentPoint) ]
 
         | ChannelState.Normal state, ChannelCommand.Close localShutdownScriptPubKey ->
             result {
@@ -870,7 +865,7 @@ module Channel =
                         return failwith "can't have pending unsigned outgoing htlcs after having sent Shutdown. this should never happen"
                     else
                         // Are we in the middle of a signature?
-                        match cm.RemoteNextCommitInfo with
+                        match state.RemoteNextCommitInfo with
                         // yes.
                         | RemoteNextCommitInfo.Waiting _waitingForRevocation ->
                             return [
@@ -892,7 +887,7 @@ module Channel =
                                 ScriptPubKey = localShutdownScriptPubKey
                             }
                             (localShutdown, [ localShutdown ])
-                    if (cm.HasNoPendingHTLCs()) then
+                    if (cm.HasNoPendingHTLCs state.RemoteNextCommitInfo) then
                         // we have to send first closing_signed msg iif we are the funder
                         if (cm.IsFunder) then
                             let! (closingTx, closingSignedMsg) =
@@ -905,6 +900,7 @@ module Channel =
                                     cs.Network
                                 )
                             let nextState = {
+                                RemoteNextCommitInfo = state.RemoteNextCommitInfo
                                 LocalShutdown = localShutdown
                                 RemoteShutdown = msg
                                 ClosingTxProposed = [[{
@@ -921,6 +917,7 @@ module Channel =
                             ]
                         else
                             let nextState = {
+                                RemoteNextCommitInfo = state.RemoteNextCommitInfo
                                 LocalShutdown = localShutdown
                                 RemoteShutdown = msg
                                 ClosingTxProposed = [ [] ]
@@ -931,36 +928,37 @@ module Channel =
                         let nextState = {
                             LocalShutdown = localShutdown
                             RemoteShutdown = msg
+                            RemoteNextCommitInfo = state.RemoteNextCommitInfo
                         }
                         return [ AcceptedShutdownWhenWeHavePendingHTLCs(nextState) ]
             }
         // ----------- closing ---------
-        | Shutdown _state, FulfillHTLC op ->
+        | Shutdown state, FulfillHTLC op ->
             result {
-                let! t = cs.Commitments |> Commitments.sendFulfill op
+                let! t = Commitments.sendFulfill op cs.Commitments state.RemoteNextCommitInfo
                 return [ WeAcceptedOperationFulfillHTLC t ]
             }
-        | Shutdown _state, ApplyUpdateFulfillHTLC msg ->
-            cs.Commitments |> Commitments.receiveFulfill msg
-        | Shutdown _state, FailHTLC op ->
-            cs.Commitments |> Commitments.sendFail cs.NodeSecret op
-        | Shutdown _state, FailMalformedHTLC op ->
-            cs.Commitments |> Commitments.sendFailMalformed op
-        | Shutdown _state, ApplyUpdateFailMalformedHTLC msg ->
-            cs.Commitments |> Commitments.receiveFailMalformed msg
+        | Shutdown state, ApplyUpdateFulfillHTLC msg ->
+            Commitments.receiveFulfill msg cs.Commitments state.RemoteNextCommitInfo
+        | Shutdown state, FailHTLC op ->
+            Commitments.sendFail cs.NodeSecret op cs.Commitments state.RemoteNextCommitInfo
+        | Shutdown state, FailMalformedHTLC op ->
+            Commitments.sendFailMalformed op cs.Commitments state.RemoteNextCommitInfo
+        | Shutdown state, ApplyUpdateFailMalformedHTLC msg ->
+            Commitments.receiveFailMalformed msg cs.Commitments state.RemoteNextCommitInfo
         | Shutdown _state, UpdateFee op ->
             cs.Commitments |> Commitments.sendFee op
         | Shutdown _state, ApplyUpdateFee msg ->
             let localFeerate = cs.FeeEstimator.GetEstSatPer1000Weight(ConfirmationTarget.HighPriority)
             cs.Commitments |> Commitments.receiveFee cs.ChannelOptions localFeerate msg
-        | Shutdown _state, SignCommitment ->
+        | Shutdown state, SignCommitment ->
             let cm = cs.Commitments
-            match cm.RemoteNextCommitInfo with
+            match state.RemoteNextCommitInfo with
             | _ when (not <| cm.LocalHasChanges()) ->
                 // nothing to sign
                 [] |> Ok
             | RemoteNextCommitInfo.Revoked _ ->
-                cm |> Commitments.sendCommit cs.ChannelPrivKeys (cs.Network)
+                Commitments.sendCommit cs.ChannelPrivKeys cs.Network cm state.RemoteNextCommitInfo
             | RemoteNextCommitInfo.Waiting _waitForRevocation ->
                 // Already in the process of signing.
                 [] |> Ok
@@ -1004,7 +1002,11 @@ module Channel =
                 let hasTooManyNegotiationDone =
                     (state.ClosingTxProposed |> List.collect (id) |> List.length) >= cs.ChannelOptions.MaxClosingNegotiationIterations
                 if (areWeInDeal || hasTooManyNegotiationDone) then
-                    return! Closing.handleMutualClose (finalizedTx, { state with MaybeBestUnpublishedTx = Some(finalizedTx) })
+                    return!
+                        Closing.handleMutualClose
+                            finalizedTx
+                            { state with MaybeBestUnpublishedTx = Some(finalizedTx) }
+                            state.RemoteNextCommitInfo
                 else
                     let lastLocalClosingFee = state.ClosingTxProposed |> List.tryHead |> Option.bind (List.tryHead) |> Option.map (fun txp -> txp.LocalClosingSigned.FeeSatoshis)
                     let! localF = 
@@ -1021,7 +1023,11 @@ module Channel =
                     let nextClosingFee =
                         Closing.nextClosingFee (localF, msg.FeeSatoshis)
                     if (Some nextClosingFee = lastLocalClosingFee) then
-                        return! Closing.handleMutualClose (finalizedTx, { state with MaybeBestUnpublishedTx = Some(finalizedTx) })
+                        return!
+                            Closing.handleMutualClose
+                                finalizedTx
+                                { state with MaybeBestUnpublishedTx = Some(finalizedTx) }
+                                state.RemoteNextCommitInfo
                     else if (nextClosingFee = msg.FeeSatoshis) then
                         // we have reached on agreement!
                         let closingTxProposed1 =
@@ -1030,7 +1036,11 @@ module Channel =
                             newProposed :: state.ClosingTxProposed
                         let negoData = { state with ClosingTxProposed = closingTxProposed1
                                                     MaybeBestUnpublishedTx = Some(finalizedTx) }
-                        return! Closing.handleMutualClose (finalizedTx, negoData)
+                        return!
+                            Closing.handleMutualClose
+                            finalizedTx
+                            negoData
+                            state.RemoteNextCommitInfo
                     else
                         let! closingTx, closingSignedMsg =
                             Closing.makeClosingTx (
@@ -1053,7 +1063,8 @@ module Channel =
             // got valid payment preimage, recalculating txs to redeem the corresponding htlc on-chain
             result {
                 let cm = cs.Commitments
-                let! (_msgToSend, newCommitments) = cm |> Commitments.sendFulfill op
+                let! (_msgToSend, newCommitments) =
+                    Commitments.sendFulfill op cm state.RemoteNextCommitInfo
                 let _localCommitPublished =
                     state.LocalCommitPublished
                     |> Option.map (fun localCommitPublished ->
@@ -1075,7 +1086,7 @@ module Channel =
             { c with State = WaitForFundingLocked data }
         | TheySentFundingLocked msg, WaitForFundingConfirmed s ->
             { c with State = WaitForFundingConfirmed({ s with Deferred = Some(msg) }) }
-        | TheySentFundingLocked _msg, WaitForFundingLocked s ->
+        | TheySentFundingLocked msg, WaitForFundingLocked s ->
             let feeRate = c.Commitments.LocalCommit.Spec.FeeRatePerKw
             let feeBase =
                 ChannelHelpers.getOurFeeBaseMSat
@@ -1093,6 +1104,7 @@ module Channel =
                                                            true,
                                                            None)
             let nextState = {
+                RemoteNextCommitInfo = RemoteNextCommitInfo.Revoked msg.NextPerCommitmentPoint
                 ShortChannelId = s.ShortChannelId
                 ChannelAnnouncement = None
                 ChannelUpdate = channelUpdate
@@ -1130,13 +1142,28 @@ module Channel =
         | WeAcceptedUpdateFee(_msg, newCommitments), ChannelState.Normal _normalData ->
             { c with Commitments = newCommitments }
 
-        | WeAcceptedOperationSign(_msg, newCommitments), ChannelState.Normal _normalData ->
-            { c with Commitments = newCommitments }
+        | WeAcceptedOperationSign(_msg, newCommitments, waitingForRevocation), ChannelState.Normal normalData ->
+            {
+                c with
+                    Commitments = newCommitments
+                    State = ChannelState.Normal {
+                        normalData with
+                            RemoteNextCommitInfo = RemoteNextCommitInfo.Waiting waitingForRevocation
+                    }
+            }
         | WeAcceptedCommitmentSigned(_msg, newCommitments), ChannelState.Normal _normalData ->
             { c with Commitments = newCommitments }
 
-        | WeAcceptedRevokeAndACK(newCommitments), ChannelState.Normal _normalData ->
-            { c with Commitments = newCommitments }
+        | WeAcceptedRevokeAndACK(newCommitments, remoteNextPerCommitmentPoint), ChannelState.Normal normalData ->
+            {
+                c with
+                    Commitments = newCommitments
+                    State = ChannelState.Normal {
+                        normalData with
+                            RemoteNextCommitInfo =
+                                RemoteNextCommitInfo.Revoked remoteNextPerCommitmentPoint
+                    }
+            }
 
         // -----  closing ------
         | AcceptedOperationShutdown msg, ChannelState.Normal d ->
