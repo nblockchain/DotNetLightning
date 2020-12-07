@@ -497,7 +497,7 @@ module RemoteForceClose =
                 if toLocalAmount > commitments.RemoteParams.DustLimitSatoshis then
                     yield toLocalTxOut
 
-                if toRemoteAmount > commitments.LocalParams.DustLimitSatoshis then
+                if toRemoteAmount > commitments.RemoteParams.DustLimitSatoshis then
                     yield toRemoteTxOut
             }
             |> Seq.sortWith TxOut.LexicographicCompare
