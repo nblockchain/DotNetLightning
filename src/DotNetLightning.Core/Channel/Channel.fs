@@ -652,7 +652,6 @@ module Channel =
                                            None)
             let nextState = {
                 ShortChannelId = state.ShortChannelId
-                ChannelAnnouncement = None
                 ChannelUpdate = initialChannelUpdate
                 LocalShutdown = None
                 RemoteShutdown = None
@@ -1112,7 +1111,6 @@ module Channel =
             let nextState = {
                 RemoteNextCommitInfo = RemoteNextCommitInfo.Revoked msg.NextPerCommitmentPoint
                 ShortChannelId = s.ShortChannelId
-                ChannelAnnouncement = None
                 ChannelUpdate = channelUpdate
                 LocalShutdown = None
                 RemoteShutdown = None
