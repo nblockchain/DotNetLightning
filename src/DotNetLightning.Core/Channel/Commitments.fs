@@ -96,6 +96,11 @@ type RemoteNextCommitInfo =
                 | Waiting _ -> remoteNextCommitInfo
                 | Revoked _ -> Revoked commitmentPubKey)
 
+        member self.PerCommitmentPoint(): PerCommitmentPoint =
+            match self with
+            | Waiting remoteCommit -> remoteCommit.RemotePerCommitmentPoint
+            | Revoked perCommitmentPoint -> perCommitmentPoint
+
 type Commitments = {
     LocalParams: LocalParams
     RemoteParams: RemoteParams
