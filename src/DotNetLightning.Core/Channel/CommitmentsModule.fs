@@ -559,7 +559,7 @@ module RemoteForceClose =
         let remoteChannelPubKeys = commitments.RemoteParams.ChannelPubKeys
         let commitmentNumber =
             obscuredCommitmentNumber.Unobscure
-                false
+                commitments.LocalParams.IsFunder
                 localChannelPubKeys.PaymentBasepoint
                 remoteChannelPubKeys.PaymentBasepoint
         let perCommitmentSecretOpt =
@@ -643,7 +643,7 @@ module RemoteForceClose =
         let remoteChannelPubKeys = commitments.RemoteParams.ChannelPubKeys
         let commitmentNumber =
             obscuredCommitmentNumber.Unobscure
-                true
+                commitments.LocalParams.IsFunder
                 localChannelPubKeys.PaymentBasepoint
                 remoteChannelPubKeys.PaymentBasepoint
 
