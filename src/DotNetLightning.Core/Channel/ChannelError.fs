@@ -316,7 +316,7 @@ module internal ChannelError =
         InvalidRevokeAndACKError.Create msg ([e]) |> InvalidRevokeAndACK
         
     let cannotCloseChannel msg =
-        msg |> CannotCloseChannel|> Error
+        msg |> CannotCloseChannel
 
     let receivedShutdownWhenRemoteHasUnsignedOutgoingHTLCs msg =
         msg |> ReceivedShutdownWhenRemoteHasUnsignedOutgoingHTLCs |> Error
