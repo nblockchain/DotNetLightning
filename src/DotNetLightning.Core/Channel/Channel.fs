@@ -536,12 +536,6 @@ module Channel =
             ((localClosingFee.Satoshi + remoteClosingFee.Satoshi) / 4L) * 2L
             |> Money.Satoshis
 
-        let handleMutualClose (closingTx: FinalizedTx)
-                              (_d: NegotiatingData)
-                              (_remoteNextCommitInfoOpt: Option<RemoteNextCommitInfo>) =
-            [ MutualClosePerformed closingTx ]
-            |> Ok
-
         let claimCurrentLocalCommitTxOutputs (channelPrivKeys: ChannelPrivKeys,
                                               commitments: Commitments,
                                               commitTx: CommitTx
@@ -1036,11 +1030,7 @@ module Channel =
                 let hasTooManyNegotiationDone =
                     (state.LocalClosingFeesProposed |> List.length) >= cs.ChannelOptions.MaxClosingNegotiationIterations
                 if (areWeInDeal || hasTooManyNegotiationDone) then
-                    return!
-                        Closing.handleMutualClose
-                            finalizedTx
-                            state
-                            cs.RemoteNextCommitInfo
+                    return [ MutualClosePerformed finalizedTx ]
                 else
                     let lastLocalClosingFee = state.LocalClosingFeesProposed |> List.tryHead
                     let! localF = 
@@ -1057,24 +1047,10 @@ module Channel =
                     let nextClosingFee =
                         Closing.nextClosingFee (localF, msg.FeeSatoshis)
                     if (Some nextClosingFee = lastLocalClosingFee) then
-                        return!
-                            Closing.handleMutualClose
-                                finalizedTx
-                                state
-                                cs.RemoteNextCommitInfo
+                        return [ MutualClosePerformed finalizedTx ]
                     else if (nextClosingFee = msg.FeeSatoshis) then
                         // we have reached on agreement!
-                        let negoData = {
-                            state with
-                                LocalClosingFeesProposed =
-                                    nextClosingFee :: state.LocalClosingFeesProposed
-                                RemoteClosingFeeProposed = Some (msg.FeeSatoshis, msg.Signature)
-                        }
-                        return!
-                            Closing.handleMutualClose
-                                finalizedTx
-                                negoData
-                                cs.RemoteNextCommitInfo
+                        return [ MutualClosePerformed finalizedTx ]
                     else
                         let! _closingTx, closingSignedMsg =
                             Closing.makeClosingTx (
