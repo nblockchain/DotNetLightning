@@ -532,18 +532,6 @@ module Channel =
                 return feeRatePerKw.CalculateFeeFromVirtualSize(tx)
             }
 
-        let makeFirstClosingTx (channelPrivKeys: ChannelPrivKeys,
-                                commitments: Commitments,
-                                localSpk: ShutdownScriptPubKey,
-                                remoteSpk: ShutdownScriptPubKey,
-                                feeEst: IFeeEstimator,
-                                network: Network
-                               ) =
-            result {
-                let! closingFee = firstClosingFee commitments localSpk remoteSpk feeEst network
-                return! makeClosingTx (channelPrivKeys, commitments, localSpk, remoteSpk, closingFee, network)
-            } |> expectTransactionError
-
         let nextClosingFee (localClosingFee: Money, remoteClosingFee: Money) =
             ((localClosingFee.Satoshi + remoteClosingFee.Satoshi) / 4L) * 2L
             |> Money.Satoshis
@@ -961,23 +949,28 @@ module Channel =
                     if hasNoPendingHTLCs then
                         // we have to send first closing_signed msg iif we are the funder
                         if (cm.IsFunder) then
-                            let! (closingTx, closingSignedMsg) =
-                                Closing.makeFirstClosingTx (
+                            let! closingFee =
+                                Closing.firstClosingFee
+                                    cm
+                                    localShutdownScriptPubKey
+                                    msg.ScriptPubKey
+                                    cs.FeeEstimator
+                                    cs.Network
+                                |> expectTransactionError
+                            let! (_closingTx, closingSignedMsg) =
+                                Closing.makeClosingTx (
                                     cs.ChannelPrivKeys,
                                     cm,
                                     localShutdownScriptPubKey,
                                     msg.ScriptPubKey,
-                                    cs.FeeEstimator,
+                                    closingFee,
                                     cs.Network
-                                )
+                                ) |> expectTransactionError
                             let nextState = {
                                 RemoteNextCommitInfo = state.RemoteNextCommitInfo
                                 LocalShutdown = localShutdownScriptPubKey
                                 RemoteShutdown = msg.ScriptPubKey
-                                ClosingTxProposed = [{
-                                    ClosingTxProposed.UnsignedTx = closingTx
-                                    LocalClosingSigned = closingSignedMsg
-                                }]
+                                ClosingFeesProposed = [ closingFee ]
                             }
                             return [
                                 AcceptedShutdownWhenNoPendingHTLCs(
@@ -990,7 +983,7 @@ module Channel =
                                 RemoteNextCommitInfo = state.RemoteNextCommitInfo
                                 LocalShutdown = localShutdownScriptPubKey
                                 RemoteShutdown = msg.ScriptPubKey
-                                ClosingTxProposed = []
+                                ClosingFeesProposed = []
                             }
                             return [ AcceptedShutdownWhenNoPendingHTLCs(None, nextState) ]
                     else
@@ -1018,7 +1011,7 @@ module Channel =
                 let lastCommitFeeSatoshi =
                     cm.FundingScriptCoin.TxOut.Value - (cm.LocalCommit.PublishableTxs.CommitTx.Value.TotalOut)
                 do! checkRemoteProposedHigherFeeThanBefore lastCommitFeeSatoshi msg.FeeSatoshis
-                let! closingTx, closingSignedMsg =
+                let! closingTx, _closingSignedMsg =
                     Closing.makeClosingTx (
                         cs.ChannelPrivKeys,
                         cm,
@@ -1038,12 +1031,11 @@ module Channel =
                         ])
                     |> expectTransactionError
                 let maybeLocalFee =
-                    state.ClosingTxProposed
+                    state.ClosingFeesProposed
                     |> List.tryHead
-                    |> Option.map (fun v -> v.LocalClosingSigned.FeeSatoshis)
                 let areWeInDeal = Some(msg.FeeSatoshis) = maybeLocalFee
                 let hasTooManyNegotiationDone =
-                    (state.ClosingTxProposed |> List.length) >= cs.ChannelOptions.MaxClosingNegotiationIterations
+                    (state.ClosingFeesProposed |> List.length) >= cs.ChannelOptions.MaxClosingNegotiationIterations
                 if (areWeInDeal || hasTooManyNegotiationDone) then
                     return!
                         Closing.handleMutualClose
@@ -1051,7 +1043,7 @@ module Channel =
                             state
                             state.RemoteNextCommitInfo
                 else
-                    let lastLocalClosingFee = state.ClosingTxProposed |> List.tryHead |> Option.map (fun txp -> txp.LocalClosingSigned.FeeSatoshis)
+                    let lastLocalClosingFee = state.ClosingFeesProposed |> List.tryHead
                     let! localF = 
                         match lastLocalClosingFee with
                         | Some v -> Ok v
@@ -1073,20 +1065,17 @@ module Channel =
                                 state.RemoteNextCommitInfo
                     else if (nextClosingFee = msg.FeeSatoshis) then
                         // we have reached on agreement!
-                        let closingTxProposed1 =
-                            let newProposed = {
-                                ClosingTxProposed.UnsignedTx = closingTx
-                                LocalClosingSigned = closingSignedMsg
-                            }
-                            newProposed :: state.ClosingTxProposed
-                        let negoData = { state with ClosingTxProposed = closingTxProposed1 }
+                        let negoData = {
+                            state with
+                                ClosingFeesProposed = nextClosingFee :: state.ClosingFeesProposed
+                        }
                         return!
                             Closing.handleMutualClose
                                 finalizedTx
                                 negoData
                                 state.RemoteNextCommitInfo
                     else
-                        let! closingTx, closingSignedMsg =
+                        let! _closingTx, closingSignedMsg =
                             Closing.makeClosingTx (
                                 cs.ChannelPrivKeys,
                                 cm,
@@ -1096,13 +1085,10 @@ module Channel =
                                 cs.Network
                             )
                             |> expectTransactionError
-                        let closingTxProposed1 =
-                            let newProposed = {
-                                ClosingTxProposed.UnsignedTx = closingTx
-                                LocalClosingSigned = closingSignedMsg
-                            }
-                            newProposed :: state.ClosingTxProposed
-                        let nextState = { state with ClosingTxProposed = closingTxProposed1 }
+                        let nextState = {
+                            state with
+                                ClosingFeesProposed = nextClosingFee :: state.ClosingFeesProposed
+                        }
                         return [ WeProposedNewClosingSigned(closingSignedMsg, nextState) ]
             }
         | Closing state, FulfillHTLC op ->
