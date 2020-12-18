@@ -68,7 +68,6 @@ type LocalCommit = {
 type RemoteCommit = {
     Index: CommitmentNumber
     Spec: CommitmentSpec
-    TxId: TxId
     RemotePerCommitmentPoint: PerCommitmentPoint
 }
 

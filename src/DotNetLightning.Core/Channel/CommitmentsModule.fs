@@ -335,7 +335,6 @@ module internal Commitments =
                         Index = cm.RemoteCommit.Index.NextCommitment()
                         Spec = spec
                         RemotePerCommitmentPoint = remoteNextPerCommitmentPoint
-                        TxId = remoteCommitTx.GetTxId()
                 }
                 let nextCommitments = {
                     cm with

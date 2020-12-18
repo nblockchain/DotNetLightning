@@ -172,7 +172,6 @@ and ChannelWaitingForFundingCreated = {
             RemoteCommit = {
                 Index = CommitmentNumber.FirstCommitment
                 Spec = remoteSpec
-                TxId = remoteCommitTx.Value.GetGlobalTransaction().GetTxId()
                 RemotePerCommitmentPoint = self.RemoteFirstPerCommitmentPoint
             }
             LocalChanges = LocalChanges.Zero
@@ -278,7 +277,6 @@ and ChannelWaitingForFundingTx = {
             RemoteCommit = {
                 RemoteCommit.Index = CommitmentNumber.FirstCommitment
                 Spec = remoteSpec
-                TxId = remoteCommitTx.Value.GetGlobalTransaction().GetTxId()
                 RemotePerCommitmentPoint = self.LastReceived.FirstPerCommitmentPoint
             }
             ChannelFlags = self.ChannelFlags
