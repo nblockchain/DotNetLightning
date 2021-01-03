@@ -442,7 +442,7 @@ module RemoteForceClose =
                            (commitments: Commitments)
                            (localChannelPrivKeys: ChannelPrivKeys)
                            (network: Network) 
-                               : TransactionBuilder =
+                               : Option<TransactionBuilder> =
 
         let localChannelPubKeys = commitments.LocalParams.ChannelPubKeys
         let remoteChannelPubKeys = commitments.RemoteParams.ChannelPubKeys
@@ -507,7 +507,7 @@ module RemoteForceClose =
             |> Seq.tryFindIndex (fun out -> out.ScriptPubKey = toLocalWitScriptPubKey)
 
         match toLocalIndexOpt with
-        | None -> ()
+        | None -> None
         | Some toLocalIndex -> 
             let revocationPrivKey =
                 perCommitmentSecret.DeriveRevocationPrivKey localChannelPrivKeys.RevocationBasepointSecret
@@ -523,9 +523,9 @@ module RemoteForceClose =
                                 toLocalWitScriptPubKey,
                                 toLocalScriptPubKey))
                 |> ignore
-            ()
-
-        transactionBuilder
+            
+            transactionBuilder |> Some
+            
 
     let tryGetFundsFromRemoteCommitmentTx (commitments: Commitments)
                                           (localChannelPrivKeys: ChannelPrivKeys)
