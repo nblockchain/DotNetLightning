@@ -502,25 +502,6 @@ module RemoteForceClose =
             }
             |> Seq.sortWith TxOut.LexicographicCompare
 
-        let toRemoteIndexOpt =
-            outputs
-            |> Seq.tryFindIndex (fun out -> out.ScriptPubKey = toRemoteScriptPubKey)
-
-        match toRemoteIndexOpt with
-        | None -> ()
-        | Some toRemoteIndex ->
-            let localPaymentPrivKey =
-                perCommitmentPoint.DerivePaymentPrivKey localChannelPrivKeys.PaymentBasepointSecret
-
-            (transactionBuilder.AddKeys(localPaymentPrivKey.RawKey()))
-                .AddCoins(Coin
-                                (commitments.RemoteCommit.TxId.Value,
-                                toRemoteIndex |> uint32,
-                                toRemoteTxOut.Value,
-                                toRemoteTxOut.ScriptPubKey)) 
-                |> ignore
-            ()
-
         let toLocalIndexOpt =
             outputs
             |> Seq.tryFindIndex (fun out -> out.ScriptPubKey = toLocalWitScriptPubKey)
