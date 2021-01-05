@@ -10,6 +10,7 @@ open DotNetLightning.Serialization.Msgs
 
 open ResultUtils
 open ResultUtils.Portability
+open DotNetLightning.Transactions
 
 type LocalChanges = {
     Proposed: IUpdateMsg list
@@ -115,6 +116,12 @@ type RemoteNextCommitInfo =
                 | Waiting _ -> remoteNextCommitInfo
                 | Revoked _ -> Revoked commitmentPubKey)
 
+type Amounts = 
+    {
+        ToLocal: Money
+        ToRemote: Money
+    }
+
 type Commitments = {
     LocalParams: LocalParams
     RemoteParams: RemoteParams
@@ -187,6 +194,44 @@ type Commitments = {
             | Some _, Some htlcIn -> htlcIn.Add |> Some
             | _ -> None
 
+        member this.RemoteCommitAmount(): Amounts= 
+            let commitFee = Transactions.commitTxFee 
+                                this.RemoteParams.DustLimitSatoshis 
+                                this.RemoteCommit.Spec
+            
+            let (toLocalAmount, toRemoteAmount) =
+                if (this.LocalParams.IsFunder) then
+                    (this.RemoteCommit.Spec.ToLocal.Satoshi
+                     |> Money.Satoshis),
+                    (this.RemoteCommit.Spec.ToRemote.Satoshi
+                     |> Money.Satoshis) - commitFee 
+                else
+                    (this.RemoteCommit.Spec.ToLocal.Satoshi
+                     |> Money.Satoshis) - commitFee,
+                    (this.RemoteCommit.Spec.ToRemote.Satoshi
+                     |> Money.Satoshis)
+
+            {Amounts.ToLocal = toLocalAmount; ToRemote = toRemoteAmount}
+
+        member this.LocalCommitAmount(): Amounts= 
+            let commitFee = Transactions.commitTxFee 
+                                this.LocalParams.DustLimitSatoshis 
+                                this.LocalCommit.Spec
+            
+            let (toLocalAmount, toRemoteAmount) =
+                if (this.LocalParams.IsFunder) then
+                    (this.LocalCommit.Spec.ToLocal.Satoshi
+                     |> Money.Satoshis),
+                    (this.LocalCommit.Spec.ToRemote.Satoshi
+                     |> Money.Satoshis) - commitFee 
+                else
+                    (this.LocalCommit.Spec.ToLocal.Satoshi
+                     |> Money.Satoshis) - commitFee,
+                    (this.LocalCommit.Spec.ToRemote.Satoshi
+                     |> Money.Satoshis)
+
+            {Amounts.ToLocal = toLocalAmount; ToRemote = toRemoteAmount}
+                    
         member this.SpendableBalance(): LNMoney =
             let remoteCommit =
                 match this.RemoteNextCommitInfo with
