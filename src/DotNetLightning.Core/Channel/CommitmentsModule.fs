@@ -438,6 +438,53 @@ module ForceCloseFundsRecovery =
         return obscuredCommitmentNumber
     }
 
+    let tryGetFundsFromRemoteCommitmentTx (commitments: Commitments)
+                                          (localChannelPrivKeys: ChannelPrivKeys)
+                                          (network: Network)
+                                          (transaction: Transaction)
+                                              : Option<TransactionBuilder> = option {
+        let! obscuredCommitmentNumber =
+            tryGetObscuredCommitmentNumber
+                commitments.FundingScriptCoin.Outpoint
+                transaction
+        let localChannelPubKeys = commitments.LocalParams.ChannelPubKeys
+        let remoteChannelPubKeys = commitments.RemoteParams.ChannelPubKeys
+        let commitmentNumber =
+            obscuredCommitmentNumber.Unobscure
+                commitments.LocalParams.IsFunder
+                localChannelPubKeys.PaymentBasepoint
+                remoteChannelPubKeys.PaymentBasepoint
+        let perCommitmentSecretOpt =
+            commitments.RemotePerCommitmentSecrets.GetPerCommitmentSecret commitmentNumber
+        let! perCommitmentPoint =
+            match perCommitmentSecretOpt with
+            | Some perCommitmentSecret -> Some <| perCommitmentSecret.PerCommitmentPoint()
+            | None ->
+                if commitments.RemoteCommit.Index = commitmentNumber then
+                    Some commitments.RemoteCommit.RemotePerCommitmentPoint
+                else
+                    None
+
+        let localCommitmentPubKeys =
+            perCommitmentPoint.DeriveCommitmentPubKeys localChannelPubKeys
+
+        let transactionBuilder = network.CreateTransactionBuilder()
+
+        let toRemoteScriptPubKey =
+            localCommitmentPubKeys.PaymentPubKey.RawPubKey().WitHash.ScriptPubKey
+        let! toRemoteIndex =
+            Seq.tryFindIndex
+                (fun (txOut: TxOut) -> txOut.ScriptPubKey = toRemoteScriptPubKey)
+                transaction.Outputs
+        let localPaymentPrivKey =
+            perCommitmentPoint.DerivePaymentPrivKey
+                localChannelPrivKeys.PaymentBasepointSecret
+        transactionBuilder.AddKeys (localPaymentPrivKey.RawKey()) |> ignore
+        transactionBuilder.AddCoins (Coin(transaction, uint32 toRemoteIndex)) |> ignore
+
+        return transactionBuilder
+    }
+
     let tryGetFundsFromLocalCommitmentTx (commitments: Commitments)
                                          (localChannelPrivKeys: ChannelPrivKeys)
                                          (network: Network)
