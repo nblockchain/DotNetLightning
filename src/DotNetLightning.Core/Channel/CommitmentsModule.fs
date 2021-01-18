@@ -474,33 +474,19 @@ module RemoteForceClose =
 
         let toLocalWitScriptPubKey = toLocalScriptPubKey.WitHash.ScriptPubKey
 
-        let commitFee = commitTxFee 
-                            commitments.RemoteParams.DustLimitSatoshis 
-                            commitments.RemoteCommit.Spec
-
-        let (toLocalAmount, toRemoteAmount) =
-            if (commitments.LocalParams.IsFunder) then
-                (commitments.RemoteCommit.Spec.ToLocal.Satoshi
-                 |> Money.Satoshis),
-                (commitments.RemoteCommit.Spec.ToRemote.Satoshi
-                 |> Money.Satoshis) - commitFee
-            else
-                (commitments.RemoteCommit.Spec.ToLocal.Satoshi
-                 |> Money.Satoshis) - commitFee,
-                (commitments.RemoteCommit.Spec.ToRemote.Satoshi
-                 |> Money.Satoshis)
+        let amounts = commitments.RemoteCommitAmount()
 
         let toLocalTxOut = 
-            TxOut(toLocalAmount, toLocalWitScriptPubKey)
+            TxOut(amounts.ToLocal, toLocalWitScriptPubKey)
         let toRemoteTxOut = 
-            TxOut(toRemoteAmount, toRemoteScriptPubKey)
+            TxOut(amounts.ToRemote, toRemoteScriptPubKey)
 
         let outputs = 
             seq {
-                if toLocalAmount > commitments.RemoteParams.DustLimitSatoshis then
+                if amounts.ToLocal > commitments.RemoteParams.DustLimitSatoshis then
                     yield toLocalTxOut
 
-                if toRemoteAmount > commitments.RemoteParams.DustLimitSatoshis then
+                if amounts.ToRemote > commitments.RemoteParams.DustLimitSatoshis then
                     yield toRemoteTxOut
             }
             |> Seq.sortWith TxOut.LexicographicCompare
