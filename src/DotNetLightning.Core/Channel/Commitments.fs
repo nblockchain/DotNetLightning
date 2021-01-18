@@ -194,7 +194,7 @@ type Commitments = {
             | Some _, Some htlcIn -> htlcIn.Add |> Some
             | _ -> None
 
-        member this.RemoteCommitAmount(): Amounts= 
+        member this.RemoteCommitAmount(): Amounts = 
             let commitFee = Transactions.commitTxFee 
                                 this.RemoteParams.DustLimitSatoshis 
                                 this.RemoteCommit.Spec
@@ -204,7 +204,7 @@ type Commitments = {
                     (this.RemoteCommit.Spec.ToLocal.Satoshi
                      |> Money.Satoshis),
                     (this.RemoteCommit.Spec.ToRemote.Satoshi
-                     |> Money.Satoshis) - commitFee 
+                     |> Money.Satoshis) - commitFee
                 else
                     (this.RemoteCommit.Spec.ToLocal.Satoshi
                      |> Money.Satoshis) - commitFee,
@@ -213,7 +213,7 @@ type Commitments = {
 
             {Amounts.ToLocal = toLocalAmount; ToRemote = toRemoteAmount}
 
-        member this.LocalCommitAmount(): Amounts= 
+        member this.LocalCommitAmount(): Amounts = 
             let commitFee = Transactions.commitTxFee 
                                 this.LocalParams.DustLimitSatoshis 
                                 this.LocalCommit.Spec
@@ -221,14 +221,14 @@ type Commitments = {
             let (toLocalAmount, toRemoteAmount) =
                 if (this.LocalParams.IsFunder) then
                     (this.LocalCommit.Spec.ToLocal.Satoshi
-                     |> Money.Satoshis),
-                    (this.LocalCommit.Spec.ToRemote.Satoshi
-                     |> Money.Satoshis) - commitFee 
-                else
-                    (this.LocalCommit.Spec.ToLocal.Satoshi
                      |> Money.Satoshis) - commitFee,
                     (this.LocalCommit.Spec.ToRemote.Satoshi
                      |> Money.Satoshis)
+                else
+                    (this.LocalCommit.Spec.ToLocal.Satoshi
+                     |> Money.Satoshis),
+                    (this.LocalCommit.Spec.ToRemote.Satoshi
+                     |> Money.Satoshis) - commitFee
 
             {Amounts.ToLocal = toLocalAmount; ToRemote = toRemoteAmount}
                     
