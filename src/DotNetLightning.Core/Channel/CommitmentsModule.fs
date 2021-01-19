@@ -466,8 +466,6 @@ module ForceCloseFundsRecovery =
 
         let localCommitmentPubKeys =
             perCommitmentPoint.DeriveCommitmentPubKeys localChannelPubKeys
-        let remoteCommitmentPubKeys =
-            perCommitmentPoint.DeriveCommitmentPubKeys remoteChannelPubKeys
 
         let transactionBuilder = network.CreateTransactionBuilder()
 
