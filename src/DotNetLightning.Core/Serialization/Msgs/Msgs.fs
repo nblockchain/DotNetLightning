@@ -519,7 +519,7 @@ type OpenChannelMsg = {
     mutable DelayedPaymentBasepoint: DelayedPaymentBasepoint
     mutable HTLCBasepoint: HtlcBasepoint
     mutable FirstPerCommitmentPoint: PerCommitmentPoint
-    mutable ChannelFlags: uint8
+    mutable ChannelFlags: ChannelFlags
     mutable ShutdownScriptPubKey: OptionalField<ShutdownScriptPubKey>
 }
 with
@@ -543,7 +543,7 @@ with
             this.DelayedPaymentBasepoint <- ls.ReadDelayedPaymentBasepoint()
             this.HTLCBasepoint <- ls.ReadHtlcBasepoint()
             this.FirstPerCommitmentPoint <- ls.ReadPerCommitmentPoint()
-            this.ChannelFlags <- ls.ReadUInt8()
+            this.ChannelFlags <- ls.ReadChannelFlags()
             this.ShutdownScriptPubKey <-
                 if (ls.Position = ls.Length) then None else
                 ls.ReadShutdownScriptPubKey() |> Some
@@ -565,7 +565,7 @@ with
             ls.Write(this.DelayedPaymentBasepoint.ToBytes())
             ls.Write(this.HTLCBasepoint.ToBytes())
             ls.Write(this.FirstPerCommitmentPoint.ToBytes())
-            ls.Write(this.ChannelFlags)
+            ls.Write(this.ChannelFlags.IntoUInt8())
             ls.WriteWithLen(this.ShutdownScriptPubKey |> Option.map(fun x -> x.ToBytes()))
 
 [<CLIMutable>]

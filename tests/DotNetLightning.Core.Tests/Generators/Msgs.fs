@@ -97,7 +97,7 @@ let openChannelGen =
         <*> delayedPaymentBasepointGen
         <*> htlcBasepointGen
         <*> perCommitmentPointGen
-        <*> Arb.generate<uint8>
+        <*> channelFlagsGen
         <*> (Gen.optionOf shutdownScriptPubKeyGen)
 
 let acceptChannelGen =

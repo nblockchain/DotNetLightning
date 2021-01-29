@@ -103,7 +103,7 @@ type RemoteNextCommitInfo =
 type Commitments = {
     LocalParams: LocalParams
     RemoteParams: RemoteParams
-    ChannelFlags: uint8
+    ChannelFlags: ChannelFlags
     FundingScriptCoin: ScriptCoin
     IsFunder: bool
     LocalCommit: LocalCommit
