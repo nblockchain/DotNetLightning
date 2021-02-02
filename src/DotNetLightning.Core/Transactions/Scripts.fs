@@ -5,6 +5,7 @@ open NBitcoin
 open NBitcoin.Crypto
 open DotNetLightning.Utils
 
+open ResultUtils.Portability
 
 module Scripts =
 

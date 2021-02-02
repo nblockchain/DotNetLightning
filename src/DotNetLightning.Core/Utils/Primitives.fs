@@ -8,6 +8,7 @@ open System.Net
 open System.Linq
 
 open ResultUtils
+open ResultUtils.Portability
 
 [<AutoOpen>]
 module Primitives =
@@ -30,7 +31,9 @@ module Primitives =
             output
 
     /// Absolute block height
+#if !NoDUsAsStructs
     [<Struct>]
+#endif
     type BlockHeight = | BlockHeight of uint32 with
         static member Zero = 0u |> BlockHeight
         static member One = 1u |> BlockHeight
@@ -56,7 +59,11 @@ module Primitives =
     /// 16bit relative block height used for `OP_CSV` locks,
     /// Since OP_CSV allow only block number of 0 ~ 65535, it is safe
     /// to restrict into the range smaller than BlockHeight
-    and  [<Struct>] BlockHeightOffset16 = | BlockHeightOffset16 of uint16 with
+    and
+#if !NoDUsAsStructs
+        [<Struct>]
+#endif
+        BlockHeightOffset16 = | BlockHeightOffset16 of uint16 with
         member x.Value = let (BlockHeightOffset16 v) = x in v
 
         static member ofBlockHeightOffset32(bho32: BlockHeightOffset32) =
@@ -75,7 +82,11 @@ module Primitives =
     ///
     /// 32bit relative block height. For `OP_CSV` locks, BlockHeightOffset16
     /// should be used instead.
-    and  [<Struct>] BlockHeightOffset32 = | BlockHeightOffset32 of uint32 with
+    and
+#if !NoDUsAsStructs
+        [<Struct>]
+#endif
+        BlockHeightOffset32 = | BlockHeightOffset32 of uint32 with
         member x.Value = let (BlockHeightOffset32 v) = x in v
 
         static member ofBlockHeightOffset16(bho16: BlockHeightOffset16) =
@@ -343,23 +354,32 @@ module Primitives =
     type BlockId = | BlockId of uint256 with
         member x.Value = let (BlockId v) = x in v
 
+#if !NoDUsAsStructs
     [<Struct>]
+#endif
     type HTLCId = | HTLCId of uint64 with
         static member Zero = HTLCId(0UL)
         member x.Value = let (HTLCId v) = x in v
 
         static member (+) (a: HTLCId, b: uint64) = (a.Value + b) |> HTLCId
 
+#if !NoDUsAsStructs
     [<Struct>]
+#endif
     type TxOutIndex = | TxOutIndex of uint16 with
         member x.Value = let (TxOutIndex v) = x in v
 
+#if !NoDUsAsStructs
     [<Struct>]
+#endif
     type TxIndexInBlock = | TxIndexInBlock of uint32 with
         member x.Value = let (TxIndexInBlock v) = x in v
 
 
-    [<Struct;StructuredFormatDisplay("{AsString}")>]
+#if !NoDUsAsStructs
+    [<Struct>]
+#endif
+    [<StructuredFormatDisplay("{AsString}")>]
     type ShortChannelId = {
         BlockHeight: BlockHeight
         BlockIndex: TxIndexInBlock

@@ -9,6 +9,8 @@ open DotNetLightning.Utils
 open DotNetLightning.Infrastructure
 open Microsoft.Extensions.Logging
     
+open ResultUtils.Portability
+
 type IActor<'TCommand> =
     inherit IDisposable
     abstract member StartAsync: unit -> Task

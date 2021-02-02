@@ -5,6 +5,8 @@ open System.Collections
 open System.Text
 open System.Text
 
+open ResultUtils.Portability
+
 type BitReader(ba: BitArray, bitCount: int) =
     
     member val Count = bitCount with get

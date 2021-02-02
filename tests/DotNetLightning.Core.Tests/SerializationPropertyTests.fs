@@ -9,6 +9,8 @@ open DotNetLightning.Serialize
 open DotNetLightning.Serialize.Msgs
 open Generators
 
+open ResultUtils.Portability
+
 let config =
     { FsCheckConfig.defaultConfig with
             arbitrary = [ typeof<P2PMsgGenerators>; typeof<PrimitiveGenerators> ]

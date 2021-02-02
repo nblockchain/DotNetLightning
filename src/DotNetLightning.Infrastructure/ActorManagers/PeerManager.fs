@@ -28,6 +28,8 @@ open DotNetLightning.Serialize
 open NBitcoin
 open Microsoft.Extensions.Logging
 
+open ResultUtils.Portability
+
 type IPeerManager =
     inherit IActorManager<PeerCommandWithContext>
     abstract member ReadAsync: PeerId * IDuplexPipe -> ValueTask

@@ -9,6 +9,8 @@ open DotNetLightning.Transactions
 open System.Net
 open Foq
 
+open ResultUtils.Portability
+
 type TestEntity =
     {
         Seed: uint256

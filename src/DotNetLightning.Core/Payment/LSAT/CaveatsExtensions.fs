@@ -3,6 +3,7 @@ namespace DotNetLightning.Payment.LSAT
 open Macaroons
 open System.Runtime.CompilerServices
 
+open ResultUtils.Portability
 
 [<Extension;AbstractClass;Sealed>]
 type CaveatsExtensions() =

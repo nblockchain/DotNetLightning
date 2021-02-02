@@ -2,6 +2,8 @@ namespace DotNetLightning.Serialize
 
 open System.IO
 
+open ResultUtils.Portability
+
 type QueryFlags = private QueryFlags of uint8
     with
     static member Create (data) = QueryFlags(data)

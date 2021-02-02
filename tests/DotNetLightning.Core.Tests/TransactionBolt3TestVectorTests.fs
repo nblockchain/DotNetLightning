@@ -14,6 +14,8 @@ open Expecto
 open GeneratorsTests
 open NBitcoin
 
+open ResultUtils.Portability
+
 let newSecp256k1 = DotNetLightning.Crypto.CryptoUtils.impl.newSecp256k1
 
 // let logger = Log.create "bolt3-transaction tests"

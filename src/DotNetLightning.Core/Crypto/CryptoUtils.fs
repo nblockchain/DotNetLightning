@@ -11,6 +11,8 @@ open Org.BouncyCastle.Crypto.Macs // For Poly1305
 open Secp256k1Net
 #endif
 
+open ResultUtils.Portability
+
 type CryptoError =
     | BadMac
     | InvalidErrorPacketLength of expected: int * actual: int

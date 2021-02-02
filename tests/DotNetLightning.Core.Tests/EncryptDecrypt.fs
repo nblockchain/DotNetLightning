@@ -5,6 +5,8 @@ open DotNetLightning.Crypto
 open DotNetLightning.Utils
 open Expecto
 
+open ResultUtils.Portability
+
 let hex = NBitcoin.DataEncoders.HexEncoder()
 
 let encryptTest(cryptoImpl: ICryptoImpl) =

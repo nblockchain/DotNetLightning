@@ -2,13 +2,14 @@ namespace DotNetLightning.Peer
 
 open NBitcoin
 
-open ResultUtils
-
 open DotNetLightning.Serialize
 open System.Collections
 open DotNetLightning.Utils
 open DotNetLightning.Serialize.Msgs
 open DotNetLightning.Utils.Aether
+
+open ResultUtils
+open ResultUtils.Portability
 
 type PeerHandleError = {
     /// Used to indicate that we probably can't make any future connections to this peer, implying

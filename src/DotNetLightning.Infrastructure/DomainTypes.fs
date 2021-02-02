@@ -5,6 +5,8 @@ open DotNetLightning.Peer
 open DotNetLightning.Channel
 open DotNetLightning.Channel
 
+open ResultUtils.Portability
+
 type ChannelEventWithContext = {
     NodeId: NodeId
     ChannelEvent: ChannelEvent

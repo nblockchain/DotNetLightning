@@ -1,5 +1,7 @@
 namespace ResultUtils
 
+open ResultUtils.Portability
+
 [<RequireQualifiedAccess>]
 module ResultOption =
   let map f ro =

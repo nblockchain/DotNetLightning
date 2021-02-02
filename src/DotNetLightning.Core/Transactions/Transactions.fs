@@ -6,14 +6,15 @@ open System.Linq
 open NBitcoin
 open NBitcoin.Crypto
 
-open ResultUtils
-
 open DotNetLightning.Utils.Primitives
 open DotNetLightning.Utils
 open DotNetLightning.Core.Utils.Extensions
 open DotNetLightning.Utils.NBitcoinExtensions
 open DotNetLightning.Utils.Aether
 open DotNetLightning.Serialize.Msgs
+
+open ResultUtils
+open ResultUtils.Portability
 
 /// We define all possible txs here.
 /// internal representation is psbt. But this is just for convenience since

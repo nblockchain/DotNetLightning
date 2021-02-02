@@ -6,8 +6,6 @@ open System.Text
 open System.Collections
 open System.Diagnostics
 
-open ResultUtils
-
 open DotNetLightning.Utils
 open DotNetLightning.Core.Utils.Extensions
 open DotNetLightning.Serialize
@@ -15,6 +13,9 @@ open DotNetLightning.Serialize
 open NBitcoin
 open NBitcoin.Crypto
 open NBitcoin.DataEncoders
+
+open ResultUtils
+open ResultUtils.Portability
 
 
 module private Helpers =
