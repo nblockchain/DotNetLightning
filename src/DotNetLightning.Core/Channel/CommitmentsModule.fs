@@ -442,7 +442,10 @@ module ForceCloseFundsRecovery =
                                           (localChannelPrivKeys: ChannelPrivKeys)
                                           (network: Network)
                                           (transaction: Transaction)
-                                              : Option<TransactionBuilder> = option {
+                                          (targetAddress: IDestination)
+                                          (feeRate: FeeRatePerKw)
+                                          (increaseFeeToRaiseCpfpIncentive: bool)
+                                              : Option<Transaction> = option {
         let! obscuredCommitmentNumber =
             tryGetObscuredCommitmentNumber
                 commitments.FundingScriptCoin.Outpoint
@@ -479,10 +482,34 @@ module ForceCloseFundsRecovery =
         let localPaymentPrivKey =
             perCommitmentPoint.DerivePaymentPrivKey
                 localChannelPrivKeys.PaymentBasepointSecret
+        transactionBuilder.SetVersion TxVersionNumberOfCommitmentTxs
         transactionBuilder.AddKeys (localPaymentPrivKey.RawKey()) |> ignore
         transactionBuilder.AddCoins (Coin(transaction, uint32 toRemoteIndex)) |> ignore
+        transactionBuilder.SendAll targetAddress |> ignore
+        let fee =
+            let feeRate = feeRate.AsNBitcoinFeeRate()
+            let recoveryTxFee = transactionBuilder.EstimateFees feeRate
+            if increaseFeeToRaiseCpfpIncentive then
+                let requiredCommitmentTxFee = feeRate.GetFee transaction
+                let actualCommitmentTxFee =
+                    let output =
+                        Seq.fold
+                            (fun (total: Money) (txOut: TxOut) -> total + txOut.Value)
+                            (Money(0m, MoneyUnit.BTC))
+                            transaction.Outputs
+                    let input = commitments.FundingScriptCoin.Amount
+                    input - output
+                if requiredCommitmentTxFee > actualCommitmentTxFee then
+                    recoveryTxFee + requiredCommitmentTxFee - actualCommitmentTxFee
+                else
+                    recoveryTxFee
+            else
+                recoveryTxFee
+        transactionBuilder.SendFees fee |> ignore
 
-        return transactionBuilder
+        let signedTransaction = transactionBuilder.BuildTransaction true
+
+        return signedTransaction
     }
 
     let tryGetFundsFromLocalCommitmentTx (commitments: Commitments)
@@ -491,6 +518,7 @@ module ForceCloseFundsRecovery =
                                          (transaction: Transaction)
                                          (targetAddress: IDestination)
                                          (feeRate: FeeRatePerKw)
+                                         (increaseFeeToRaiseCpfpIncentive: bool)
                                              : Option<Transaction> = option {
         let! obscuredCommitmentNumber =
             tryGetObscuredCommitmentNumber
@@ -541,20 +569,23 @@ module ForceCloseFundsRecovery =
         transactionBuilder.SendAll targetAddress |> ignore
         let fee =
             let feeRate = feeRate.AsNBitcoinFeeRate()
-            let spendingTxFee = transactionBuilder.EstimateFees feeRate
-            let requiredCommitmentTxFee = feeRate.GetFee transaction
-            let actualCommitmentTxFee =
-                let output =
-                    Seq.fold
-                        (fun (total: Money) (txOut: TxOut) -> total + txOut.Value)
-                        (Money(0m, MoneyUnit.BTC))
-                        transaction.Outputs
-                let input = commitments.FundingScriptCoin.Amount
-                input - output
-            if requiredCommitmentTxFee > actualCommitmentTxFee then
-                spendingTxFee + requiredCommitmentTxFee - actualCommitmentTxFee
+            let recoveryTxFee = transactionBuilder.EstimateFees feeRate
+            if increaseFeeToRaiseCpfpIncentive then
+                let requiredCommitmentTxFee = feeRate.GetFee transaction
+                let actualCommitmentTxFee =
+                    let output =
+                        Seq.fold
+                            (fun (total: Money) (txOut: TxOut) -> total + txOut.Value)
+                            (Money(0m, MoneyUnit.BTC))
+                            transaction.Outputs
+                    let input = commitments.FundingScriptCoin.Amount
+                    input - output
+                if requiredCommitmentTxFee > actualCommitmentTxFee then
+                    recoveryTxFee + requiredCommitmentTxFee - actualCommitmentTxFee
+                else
+                    recoveryTxFee
             else
-                spendingTxFee
+                recoveryTxFee
         transactionBuilder.SendFees fee |> ignore
 
         let signedTransaction = transactionBuilder.BuildTransaction true
