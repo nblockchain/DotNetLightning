@@ -1,5 +1,6 @@
 namespace DotNetLightning.Channel
 
+open System
 open NBitcoin
 
 open DotNetLightning.Utils
@@ -452,7 +453,7 @@ module ForceCloseFundsRecovery =
         let remoteChannelPubKeys = commitments.RemoteParams.ChannelPubKeys
         let commitmentNumber =
             obscuredCommitmentNumber.Unobscure
-                true
+                commitments.LocalParams.IsFunder
                 localChannelPubKeys.PaymentBasepoint
                 remoteChannelPubKeys.PaymentBasepoint
 
@@ -479,9 +480,17 @@ module ForceCloseFundsRecovery =
         let delayedPaymentPrivKey =
             perCommitmentPoint.DeriveDelayedPaymentPrivKey
                 localChannelPrivKeys.DelayedPaymentBasepointSecret
+
+        let coinOptions = CoinOptions()
+        coinOptions.Sequence <- Nullable <| Sequence(uint32 commitments.LocalParams.ToSelfDelay.Value)
+
+        transactionBuilder.SetVersion TxVersionNumberOfCommitmentTxs
         transactionBuilder.Extensions.Add (CommitmentToLocalExtension())
         transactionBuilder.AddKeys (delayedPaymentPrivKey.RawKey()) |> ignore
-        transactionBuilder.AddCoins (ScriptCoin(transaction, uint32 toLocalIndex, toLocalScriptPubKey)) |> ignore
+        transactionBuilder.AddCoin(
+            ScriptCoin(transaction, uint32 toLocalIndex, toLocalScriptPubKey),
+            coinOptions
+        ) |> ignore
         transactionBuilder.SendAll targetAddress |> ignore
         let fee =
             let feeRate = feeRate.AsNBitcoinFeeRate()
@@ -501,10 +510,7 @@ module ForceCloseFundsRecovery =
                 spendingTxFee
         transactionBuilder.SendFees fee |> ignore
 
-        let spendingTransaction = transactionBuilder.BuildTransaction false
-        spendingTransaction.Version <- TxVersionNumberOfCommitmentTxs
-        spendingTransaction.Inputs.[0].Sequence <- Sequence(uint32 commitments.LocalParams.ToSelfDelay.Value)
-        let signedTransaction = transactionBuilder.SignTransaction spendingTransaction
+        let signedTransaction = transactionBuilder.BuildTransaction true
 
         return signedTransaction
     }
