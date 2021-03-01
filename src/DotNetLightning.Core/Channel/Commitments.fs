@@ -101,11 +101,6 @@ type RemoteNextCommitInfo =
             | Revoked perCommitmentPoint -> perCommitmentPoint
 
 type Commitments = {
-    LocalParams: LocalParams
-    RemoteParams: RemoteParams
-    ChannelFlags: ChannelFlags
-    FundingScriptCoin: ScriptCoin
-    IsFunder: bool
     LocalCommit: LocalCommit
     RemoteCommit: RemoteCommit
     LocalChanges: LocalChanges
@@ -113,7 +108,6 @@ type Commitments = {
     LocalNextHTLCId: HTLCId
     RemoteNextHTLCId: HTLCId
     OriginChannels: Map<HTLCId, HTLCSource>
-    RemoteChannelPubKeys: ChannelPubKeys
     RemotePerCommitmentSecrets: PerCommitmentSecretStore
 }
     with
@@ -123,9 +117,6 @@ type Commitments = {
         static member RemoteChanges_: Lens<_, _> =
             (fun c -> c.RemoteChanges),
             (fun v c -> { c with RemoteChanges = v })
-
-        member this.ChannelId(): ChannelId =
-            this.FundingScriptCoin.Outpoint.ToChannelId()
 
         member this.AddLocalProposal(proposal: IUpdateMsg) =
             let lens = Commitments.LocalChanges_ >-> LocalChanges.Proposed_
@@ -184,7 +175,10 @@ type Commitments = {
             | Some _, Some htlcIn -> htlcIn.Add |> Some
             | _ -> None
 
-        member this.SpendableBalance (remoteNextCommitInfo: RemoteNextCommitInfo): LNMoney =
+        member this.SpendableBalance (localIsFunder: bool)
+                                     (remoteParams: RemoteParams)
+                                     (remoteNextCommitInfo: RemoteNextCommitInfo)
+                                         : LNMoney =
             let remoteCommit =
                 match remoteNextCommitInfo with
                 | RemoteNextCommitInfo.Waiting nextRemoteCommit -> nextRemoteCommit
@@ -203,18 +197,18 @@ type Commitments = {
                         err
                 | Ok reduced -> reduced
             let fees =
-                if this.IsFunder then
-                    Transactions.commitTxFee this.RemoteParams.DustLimitSatoshis reduced
+                if localIsFunder then
+                    Transactions.commitTxFee remoteParams.DustLimitSatoshis reduced
                     |> LNMoney.FromMoney
                 else
                     LNMoney.Zero
             let channelReserve =
-                this.RemoteParams.ChannelReserveSatoshis
+                remoteParams.ChannelReserveSatoshis
                 |> LNMoney.FromMoney
             let totalBalance = reduced.ToRemote
             let untrimmedSpendableBalance = totalBalance - channelReserve - fees
             let dustLimit =
-                this.RemoteParams.DustLimitSatoshis
+                remoteParams.DustLimitSatoshis
                 |> LNMoney.FromMoney
             let untrimmedMax = LNMoney.Min(untrimmedSpendableBalance, dustLimit)
             let spendableBalance = LNMoney.Max(untrimmedMax, untrimmedSpendableBalance)
