@@ -461,7 +461,13 @@ module Channel =
 
         let handleMutualClose (closingTx: FinalizedTx, d: NegotiatingData) =
             let nextData =
-                ClosingData.Create (d.ChannelId, d.Commitments, None, DateTime.Now, (d.ClosingTxProposed |> List.collect id |> List.map (fun tx -> tx.UnsignedTx)), closingTx)
+                ClosingData.Create
+                    d.ChannelId
+                    d.Commitments
+                    None
+                    DateTime.Now
+                    (d.ClosingTxProposed |> List.collect id |> List.map (fun tx -> tx.UnsignedTx))
+                    closingTx
             [ MutualClosePerformed (closingTx, nextData) ]
             |> Ok
 
