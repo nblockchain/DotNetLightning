@@ -125,8 +125,6 @@ type ChannelCommand =
     | ApplyOpenChannel of OpenChannelMsg
     | ApplyFundingCreated of FundingCreatedMsg
 
-    | CreateChannelReestablish
-
     // normal
     | MonoHopUnidirectionalPayment of OperationMonoHopUnidirectionalPayment
     | ApplyMonoHopUnidirectionalPayment of msg: MonoHopUnidirectionalPaymentMsg
