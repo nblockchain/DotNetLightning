@@ -288,8 +288,7 @@ module internal Commitments =
                         (staticChannelConfig.LocalParams.ChannelReserveSatoshis, fees,  (-1 * missing))
                         |> cannotAffordFee
                 else
-                    return
-                        [ WeAcceptedUpdateFee(msg, nextCommitments) ]
+                    return nextCommitments
             }
 
     let sendCommit (channelPrivKeys: ChannelPrivKeys)
