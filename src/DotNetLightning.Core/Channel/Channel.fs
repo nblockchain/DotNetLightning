@@ -601,6 +601,23 @@ and Channel = {
             return channel, payment
     }
 
+    member self.ApplyMonoHopUnidirectionalPayment (msg: MonoHopUnidirectionalPaymentMsg)
+                                                      : Result<Channel, ChannelError> = result {
+        let commitments1 = self.Commitments.AddRemoteProposal(msg)
+        let! reduced =
+            commitments1.LocalCommit.Spec.Reduce
+                (commitments1.LocalChanges.ACKed, commitments1.RemoteChanges.Proposed)
+            |> expectTransactionError
+        do!
+            Validation.checkTheirMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec
+                reduced
+                self.StaticChannelConfig
+                msg
+        return {
+            self with
+                Commitments = commitments1
+        }
+    }
 
 module Channel =
 
@@ -655,17 +672,6 @@ module Channel =
 
     let executeCommand (cs: Channel) (command: ChannelCommand): Result<ChannelEvent list, ChannelError> =
         match command with
-        | ApplyMonoHopUnidirectionalPayment msg ->
-            result {
-                let commitments1 = cs.Commitments.AddRemoteProposal(msg)
-                let! reduced = commitments1.LocalCommit.Spec.Reduce (commitments1.LocalChanges.ACKed, commitments1.RemoteChanges.Proposed) |> expectTransactionError
-                do!
-                    Validation.checkTheirMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec
-                        reduced
-                        cs.StaticChannelConfig
-                        msg
-                return [ WeAcceptedMonoHopUnidirectionalPayment commitments1 ]
-            }
         | AddHTLC op when cs.NegotiatingState.HasEnteredShutdown() ->
             sprintf "Could not add new HTLC %A since shutdown is already in progress." op
             |> apiMisuse
@@ -1089,8 +1095,6 @@ module Channel =
         match e with
         // ----- normal operation --------
         | WeAcceptedOperationAddHTLC(_, newCommitments) ->
-            { c with Commitments = newCommitments }
-        | WeAcceptedMonoHopUnidirectionalPayment(newCommitments) ->
             { c with Commitments = newCommitments }
         | WeAcceptedUpdateAddHTLC(newCommitments) ->
             { c with Commitments = newCommitments }
