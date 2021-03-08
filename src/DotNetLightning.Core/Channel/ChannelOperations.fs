@@ -124,7 +124,6 @@ type ChannelCommand =
     | ApplyFundingCreated of FundingCreatedMsg
 
     // normal
-    | ApplyCommitmentSigned of CommitmentSignedMsg
     | ApplyRevokeAndACK of RevokeAndACKMsg
 
     // close

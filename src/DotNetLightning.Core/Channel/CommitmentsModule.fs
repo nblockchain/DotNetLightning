@@ -355,7 +355,7 @@ module internal Commitments =
                       (msg: CommitmentSignedMsg)
                       (staticChannelConfig: StaticChannelConfig)
                       (cm: Commitments)
-                          : Result<ChannelEvent list, ChannelError> =
+                          : Result<RevokeAndACKMsg * Commitments, ChannelError> =
         if cm.RemoteHasChanges() |> not then
             ReceivedCommitmentSignedWhenWeHaveNoPendingChanges |> Error
         else
@@ -459,7 +459,7 @@ module internal Commitments =
                               LocalChanges = ourChanges1
                               RemoteChanges = theirChanges1
                               OriginChannels = originChannels1 }
-                return [ WeAcceptedCommitmentSigned(nextMsg, nextCommitments) ;]
+                return nextMsg, nextCommitments
             }
 
 module RemoteForceClose =
