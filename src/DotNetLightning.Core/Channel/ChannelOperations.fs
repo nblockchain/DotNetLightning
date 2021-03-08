@@ -124,7 +124,6 @@ type ChannelCommand =
     | ApplyFundingCreated of FundingCreatedMsg
 
     // close
-    | Close of ShutdownScriptPubKey
     | ApplyClosingSigned of ClosingSignedMsg
     | RemoteShutdown of ShutdownMsg * ShutdownScriptPubKey
 
