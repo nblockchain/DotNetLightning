@@ -478,6 +478,29 @@ and Channel = {
         }
         ourChannelReestablish
 
+    member self.ApplyFundingLocked (fundingLockedMsg: FundingLockedMsg)
+                                       : Result<Channel, ChannelError> = result {
+        do!
+            match self.RemoteNextCommitInfo with
+            | None -> Ok ()
+            | Some remoteNextCommitInfo ->
+                if remoteNextCommitInfo.PerCommitmentPoint()
+                    <> fundingLockedMsg.NextPerCommitmentPoint then
+                    Error <| InvalidFundingLocked { NetworkMsg = fundingLockedMsg }
+                else
+                    Ok ()
+        match self.ShortChannelId with
+        | None ->
+            return {
+                self with
+                    RemoteNextCommitInfo =
+                        RemoteNextCommitInfo.Revoked fundingLockedMsg.NextPerCommitmentPoint
+                        |> Some
+            }
+        | Some _shortChannelId ->
+            return self
+    }
+
 module Channel =
 
     let private hex = NBitcoin.DataEncoders.HexEncoder()
@@ -555,22 +578,6 @@ module Channel =
 
     let executeCommand (cs: Channel) (command: ChannelCommand): Result<ChannelEvent list, ChannelError> =
         match command with
-        | ApplyFundingLocked msg ->
-            result {
-                do!
-                    match cs.RemoteNextCommitInfo with
-                    | None -> Ok ()
-                    | Some remoteNextCommitInfo ->
-                        if remoteNextCommitInfo.PerCommitmentPoint() <> msg.NextPerCommitmentPoint then
-                            Error <| InvalidFundingLocked { NetworkMsg = msg }
-                        else
-                            Ok ()
-                match cs.ShortChannelId with
-                | None ->
-                    return [ TheySentFundingLocked msg ]
-                | Some _shortChannelId ->
-                    return [ BothFundingLocked(msg.NextPerCommitmentPoint) ]
-            }
         | ApplyFundingConfirmedOnBC(height, txindex, depth) ->
             match cs.ShortChannelId with
             | None -> 
@@ -1080,12 +1087,6 @@ module Channel =
             {
                 c with
                     ShortChannelId = Some shortChannelId
-            }
-        | TheySentFundingLocked msg ->
-            {
-                c with
-                    RemoteNextCommitInfo =
-                        Some <| RemoteNextCommitInfo.Revoked msg.NextPerCommitmentPoint
             }
         // ----- normal operation --------
         | WeAcceptedOperationMonoHopUnidirectionalPayment(_, newCommitments) ->
