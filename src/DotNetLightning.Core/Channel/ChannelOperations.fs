@@ -124,7 +124,6 @@ type ChannelCommand =
     | ApplyFundingCreated of FundingCreatedMsg
 
     // normal
-    | UpdateFee of OperationUpdateFee
     | ApplyUpdateFee of UpdateFeeMsg
 
     | SignCommitment
