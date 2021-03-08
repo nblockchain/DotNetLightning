@@ -124,7 +124,6 @@ type ChannelCommand =
     | ApplyFundingCreated of FundingCreatedMsg
 
     // normal
-    | FulfillHTLC of OperationFulfillHTLC
     | ApplyUpdateFulfillHTLC of UpdateFulfillHTLCMsg
     | FailHTLC of OperationFailHTLC
     | ApplyUpdateFailHTLC of UpdateFailHTLCMsg
