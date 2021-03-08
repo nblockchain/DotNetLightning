@@ -341,7 +341,7 @@ module internal Commitments =
                                 Signed = cm.RemoteChanges.ACKed
                         }
                 }
-                return [ WeAcceptedOperationSign (msg, nextCommitments, nextRemoteCommitInfo) ]
+                return msg, nextCommitments, nextRemoteCommitInfo
             }
         | RemoteNextCommitInfo.Waiting _ ->
             CanNotSignBeforeRevocation |> Error
