@@ -123,9 +123,6 @@ type ChannelCommand =
     | ApplyOpenChannel of OpenChannelMsg
     | ApplyFundingCreated of FundingCreatedMsg
 
-    // close
-    | ApplyClosingSigned of ClosingSignedMsg
-
     // else
     | ForceClose
     | GetState
