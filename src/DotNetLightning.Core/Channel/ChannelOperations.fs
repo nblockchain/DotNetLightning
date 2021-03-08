@@ -124,7 +124,6 @@ type ChannelCommand =
     | ApplyFundingCreated of FundingCreatedMsg
 
     // normal
-    | MonoHopUnidirectionalPayment of OperationMonoHopUnidirectionalPayment
     | ApplyMonoHopUnidirectionalPayment of msg: MonoHopUnidirectionalPaymentMsg
     | AddHTLC of OperationAddHTLC
     | ApplyUpdateAddHTLC of msg: UpdateAddHTLCMsg * currentHeight: BlockHeight

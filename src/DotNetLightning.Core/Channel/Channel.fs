@@ -329,6 +329,28 @@ and Channel = {
     Commitments: Commitments
  }
     with
+
+    member internal self.RemoteNextCommitInfoIfFundingLocked (operation: string)
+                                                                 : Result<RemoteNextCommitInfo, ChannelError> =
+        match self.RemoteNextCommitInfo with
+        | None ->
+            sprintf
+                "cannot perform operation %s because peer has not sent funding_locked"
+                operation
+            |> apiMisuse
+        | Some remoteNextCommitInfo -> Ok remoteNextCommitInfo
+
+    member internal self.RemoteNextCommitInfoIfFundingLockedNormal (operation: string)
+                                                                       : Result<RemoteNextCommitInfo, ChannelError> =
+        match self.ShortChannelId with
+        | None ->
+            sprintf
+                "cannot perform operation %s because funding is not confirmed"
+                operation
+            |> apiMisuse
+        | Some _ ->
+            self.RemoteNextCommitInfoIfFundingLocked operation
+
     static member NewOutbound (channelHandshakeLimits: ChannelHandshakeLimits)
                               (channelOptions: ChannelOptions)
                               (announceChannel: bool)
@@ -545,6 +567,41 @@ and Channel = {
                 return! Error <| OnceConfirmedFundingTxHasBecomeUnconfirmed(height, depth)
     }
 
+    member self.MonoHopUnidirectionalPayment (amount: LNMoney)
+                                                 : Result<Channel * MonoHopUnidirectionalPaymentMsg, ChannelError> = result {
+        if self.NegotiatingState.HasEnteredShutdown() then
+            return!
+                sprintf
+                    "Could not send mono-hop unidirectional payment of amount %A since shutdown is already \
+                    in progress." amount
+                |> apiMisuse
+        else
+            let payment: MonoHopUnidirectionalPaymentMsg = {
+                ChannelId = self.StaticChannelConfig.ChannelId()
+                Amount = amount
+            }
+            let commitments1 = self.Commitments.AddLocalProposal(payment)
+
+            let! remoteNextCommitInfo =
+                self.RemoteNextCommitInfoIfFundingLockedNormal "MonoHopUniDirectionalPayment"
+            let remoteCommit1 =
+                match remoteNextCommitInfo with
+                | Waiting nextRemoteCommit -> nextRemoteCommit
+                | Revoked _info -> commitments1.RemoteCommit
+            let! reduced = remoteCommit1.Spec.Reduce(commitments1.RemoteChanges.ACKed, commitments1.LocalChanges.Proposed) |> expectTransactionError
+            do!
+                Validation.checkOurMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec
+                    reduced
+                    self.StaticChannelConfig
+                    payment
+            let channel = {
+                self with
+                    Commitments = commitments1
+            }
+            return channel, payment
+    }
+
+
 module Channel =
 
     let private hex = NBitcoin.DataEncoders.HexEncoder()
@@ -596,57 +653,8 @@ module Channel =
             ((localClosingFee.Satoshi + remoteClosingFee.Satoshi) / 4L) * 2L
             |> Money.Satoshis
 
-    let remoteNextCommitInfoIfFundingLocked (remoteNextCommitInfoOpt: Option<RemoteNextCommitInfo>)
-                                            (operation: string)
-                                                : Result<RemoteNextCommitInfo, ChannelError> =
-        match remoteNextCommitInfoOpt with
-        | None ->
-            sprintf
-                "cannot perform operation %s because peer has not sent funding_locked"
-                operation
-            |> apiMisuse
-        | Some remoteNextCommitInfo -> Ok remoteNextCommitInfo
-
-    let remoteNextCommitInfoIfFundingLockedNormal (shortChannelIdOpt: Option<ShortChannelId>)
-                                                  (remoteNextCommitInfoOpt: Option<RemoteNextCommitInfo>)
-                                                  (operation: string)
-                                                      : Result<RemoteNextCommitInfo, ChannelError> =
-        match shortChannelIdOpt with
-        | None ->
-            sprintf
-                "cannot perform operation %s because funding is not confirmed"
-                operation
-            |> apiMisuse
-        | Some _ ->
-            remoteNextCommitInfoIfFundingLocked remoteNextCommitInfoOpt operation
-
     let executeCommand (cs: Channel) (command: ChannelCommand): Result<ChannelEvent list, ChannelError> =
         match command with
-        | MonoHopUnidirectionalPayment op when cs.NegotiatingState.HasEnteredShutdown() ->
-            sprintf "Could not send mono-hop unidirectional payment %A since shutdown is already in progress." op
-            |> apiMisuse
-        | MonoHopUnidirectionalPayment op ->
-            result {
-                let payment: MonoHopUnidirectionalPaymentMsg = {
-                    ChannelId = cs.StaticChannelConfig.ChannelId()
-                    Amount = op.Amount
-                }
-                let commitments1 = cs.Commitments.AddLocalProposal(payment)
-
-                let! remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "MonoHopUniDirectionalPayment"
-                let remoteCommit1 =
-                    match remoteNextCommitInfo with
-                    | Waiting nextRemoteCommit -> nextRemoteCommit
-                    | Revoked _info -> commitments1.RemoteCommit
-                let! reduced = remoteCommit1.Spec.Reduce(commitments1.RemoteChanges.ACKed, commitments1.LocalChanges.Proposed) |> expectTransactionError
-                do!
-                    Validation.checkOurMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec
-                        reduced
-                        cs.StaticChannelConfig
-                        payment
-                return [ WeAcceptedOperationMonoHopUnidirectionalPayment(payment, commitments1) ]
-            }
         | ApplyMonoHopUnidirectionalPayment msg ->
             result {
                 let commitments1 = cs.Commitments.AddRemoteProposal(msg)
@@ -687,7 +695,7 @@ module Channel =
                     }
 
                 let! remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "AddHTLC"
+                    cs.RemoteNextCommitInfoIfFundingLockedNormal "AddHTLC"
                 // we need to base the next current commitment on the last sig we sent, even if we didn't yet receive their revocation
                 let remoteCommit1 =
                     match remoteNextCommitInfo with
@@ -728,7 +736,7 @@ module Channel =
         | FulfillHTLC cmd ->
             result {
                 let! remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "FulfillHTLC"
+                    cs.RemoteNextCommitInfoIfFundingLockedNormal "FulfillHTLC"
                 let! t =
                     Commitments.sendFulfill
                         cmd
@@ -740,13 +748,13 @@ module Channel =
         | ChannelCommand.ApplyUpdateFulfillHTLC msg ->
             result {
                 let! remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "ApplyUpdateFulfullHTLC"
+                    cs.RemoteNextCommitInfoIfFundingLockedNormal "ApplyUpdateFulfullHTLC"
                 return! Commitments.receiveFulfill msg cs.Commitments remoteNextCommitInfo
             }
         | FailHTLC op ->
             result {
                 let! remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "FailHTLC"
+                    cs.RemoteNextCommitInfoIfFundingLockedNormal "FailHTLC"
                 return!
                     Commitments.sendFail
                         cs.NodeSecret
@@ -758,7 +766,7 @@ module Channel =
         | FailMalformedHTLC op ->
             result {
                 let! remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "FailMalformedHTLC"
+                    cs.RemoteNextCommitInfoIfFundingLockedNormal "FailMalformedHTLC"
                 return!
                     Commitments.sendFailMalformed
                         op
@@ -769,25 +777,25 @@ module Channel =
         | ApplyUpdateFailHTLC msg ->
             result {
                 let! remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "ApplyUpdateFailHTLC"
+                    cs.RemoteNextCommitInfoIfFundingLockedNormal "ApplyUpdateFailHTLC"
                 return! Commitments.receiveFail msg cs.Commitments remoteNextCommitInfo
             }
         | ApplyUpdateFailMalformedHTLC msg ->
             result {
                 let! remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "ApplyUpdateFailMalformedHTLC"
+                    cs.RemoteNextCommitInfoIfFundingLockedNormal "ApplyUpdateFailMalformedHTLC"
                 return! Commitments.receiveFailMalformed msg cs.Commitments remoteNextCommitInfo
             }
         | UpdateFee op ->
             result {
                 let! _remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "UpdateFee"
+                    cs.RemoteNextCommitInfoIfFundingLockedNormal "UpdateFee"
                 return! Commitments.sendFee op cs.StaticChannelConfig cs.Commitments
             }
         | ApplyUpdateFee msg ->
             result {
                 let! _remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "ApplyUpdateFee"
+                    cs.RemoteNextCommitInfoIfFundingLockedNormal "ApplyUpdateFee"
                 let localFeerate = cs.ChannelOptions.FeeEstimator.GetEstSatPer1000Weight(ConfirmationTarget.HighPriority)
                 return!
                     Commitments.receiveFee
@@ -801,7 +809,7 @@ module Channel =
             let cm = cs.Commitments
             result {
                 let! remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "SignCommit"
+                    cs.RemoteNextCommitInfoIfFundingLockedNormal "SignCommit"
                 match remoteNextCommitInfo with
                 | _ when (cm.LocalHasChanges() |> not) ->
                     // Ignore SignCommitment Command (nothing to sign)
@@ -820,7 +828,7 @@ module Channel =
         | ApplyCommitmentSigned msg ->
             result {
                 let! _remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "ApplyCommitmentSigned"
+                    cs.RemoteNextCommitInfoIfFundingLockedNormal "ApplyCommitmentSigned"
                 return!
                     Commitments.receiveCommit
                         cs.ChannelPrivKeys
@@ -831,7 +839,7 @@ module Channel =
         | ApplyRevokeAndACK msg ->
             result {
                 let! remoteNextCommitInfo =
-                    remoteNextCommitInfoIfFundingLockedNormal cs.ShortChannelId cs.RemoteNextCommitInfo "ApplyRevokeAndACK"
+                    cs.RemoteNextCommitInfoIfFundingLockedNormal "ApplyRevokeAndACK"
                 let cm = cs.Commitments
                 match remoteNextCommitInfo with
                 | RemoteNextCommitInfo.Waiting _ when (msg.PerCommitmentSecret.PerCommitmentPoint() <> cm.RemoteCommit.RemotePerCommitmentPoint) ->
@@ -1080,8 +1088,6 @@ module Channel =
     let applyEvent c (e: ChannelEvent): Channel =
         match e with
         // ----- normal operation --------
-        | WeAcceptedOperationMonoHopUnidirectionalPayment(_, newCommitments) ->
-            { c with Commitments = newCommitments }
         | WeAcceptedOperationAddHTLC(_, newCommitments) ->
             { c with Commitments = newCommitments }
         | WeAcceptedMonoHopUnidirectionalPayment(newCommitments) ->

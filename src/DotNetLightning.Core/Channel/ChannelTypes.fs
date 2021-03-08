@@ -57,7 +57,6 @@ module Data =
 type ChannelEvent =
     // --- ln events ---
     // -------- normal operation ------
-    | WeAcceptedOperationMonoHopUnidirectionalPayment of msg: MonoHopUnidirectionalPaymentMsg * newCommitments: Commitments
     | WeAcceptedMonoHopUnidirectionalPayment of newCommitments: Commitments
 
     | WeAcceptedOperationAddHTLC of msg: UpdateAddHTLCMsg * newCommitments: Commitments
