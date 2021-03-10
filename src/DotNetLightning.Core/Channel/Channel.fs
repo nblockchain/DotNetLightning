@@ -183,20 +183,22 @@ and ChannelWaitingForFundingTx = {
     Network: Network
     LocalStaticShutdownScriptPubKey: Option<ShutdownScriptPubKey>
     RemoteStaticShutdownScriptPubKey: Option<ShutdownScriptPubKey>
-    LastReceived: AcceptChannelMsg
     TemporaryChannelId: ChannelId
     RemoteChannelPubKeys: ChannelPubKeys
     FundingSatoshis: Money
     PushMSat: LNMoney
     InitFeeRatePerKw: FeeRatePerKw
     LocalParams: LocalParams
+    RemoteFirstPerCommitmentPoint: PerCommitmentPoint
+    RemoteParams: RemoteParams
     RemoteInit: InitMsg
+    FundingTxMinimumDepth: BlockHeightOffset32
 } with
     member self.CreateFundingTx (fundingTx: FinalizedTx)
                                 (outIndex: TxOutIndex)
                                     : Result<FundingCreatedMsg * ChannelWaitingForFundingSigned, ChannelError> = result {
-        let remoteParams = RemoteParams.FromAcceptChannel self.RemoteInit self.LastReceived
         let localParams = self.LocalParams
+        let remoteParams = self.RemoteParams
         let commitmentSpec = CommitmentSpec.Create (self.FundingSatoshis.ToLNMoney() - self.PushMSat) self.PushMSat self.InitFeeRatePerKw
         let commitmentSeed = self.ChannelPrivKeys.CommitmentSeed
         let fundingTxId = fundingTx.Value.GetTxId()
@@ -213,12 +215,12 @@ and ChannelWaitingForFundingTx = {
                 outIndex
                 fundingTxId
                 (commitmentSeed.DerivePerCommitmentPoint CommitmentNumber.FirstCommitment)
-                self.LastReceived.FirstPerCommitmentPoint
+                self.RemoteFirstPerCommitmentPoint
                 self.Network
         let localSigOfRemoteCommit, _ =
             self.ChannelPrivKeys.SignWithFundingPrivKey remoteCommitTx.Value
         let nextMsg: FundingCreatedMsg = {
-            TemporaryChannelId = self.LastReceived.TemporaryChannelId
+            TemporaryChannelId = self.TemporaryChannelId
             FundingTxId = fundingTxId
             FundingOutputIndex = outIndex
             Signature = !>localSigOfRemoteCommit.Signature
@@ -236,7 +238,7 @@ and ChannelWaitingForFundingTx = {
                 AnnounceChannel = self.AnnounceChannel
                 RemoteNodeId = self.RemoteNodeId
                 Network = self.Network
-                FundingTxMinimumDepth = self.LastReceived.MinimumDepth
+                FundingTxMinimumDepth = self.FundingTxMinimumDepth
                 LocalStaticShutdownScriptPubKey = self.LocalStaticShutdownScriptPubKey
                 RemoteStaticShutdownScriptPubKey = self.RemoteStaticShutdownScriptPubKey
                 IsFunder = true
@@ -255,7 +257,7 @@ and ChannelWaitingForFundingTx = {
             RemoteCommit = {
                 RemoteCommit.Index = CommitmentNumber.FirstCommitment
                 Spec = remoteSpec
-                RemotePerCommitmentPoint = self.LastReceived.FirstPerCommitmentPoint
+                RemotePerCommitmentPoint = self.RemoteFirstPerCommitmentPoint
             }
         }
         return nextMsg, channelWaitingForFundingSigned
@@ -294,6 +296,7 @@ and ChannelWaitingForAcceptChannel = {
         }
         let destination = redeem.WitHash :> IDestination
         let amount = self.FundingSatoshis
+        let remoteParams = RemoteParams.FromAcceptChannel self.RemoteInit msg
         let channelWaitingForFundingTx = {
             AnnounceChannel = self.AnnounceChannel
             ChannelOptions = self.ChannelOptions
@@ -303,14 +306,16 @@ and ChannelWaitingForAcceptChannel = {
             Network = self.Network
             LocalStaticShutdownScriptPubKey = self.LocalStaticShutdownScriptPubKey
             RemoteStaticShutdownScriptPubKey = msg.ShutdownScriptPubKey
-            LastReceived = msg
-            TemporaryChannelId = self.TemporaryChannelId
+            TemporaryChannelId = msg.TemporaryChannelId
             RemoteChannelPubKeys = remoteChannelPubKeys
             FundingSatoshis = self.FundingSatoshis
             PushMSat = self.PushMSat
             InitFeeRatePerKw = self.InitFeeRatePerKw
             LocalParams = self.LocalParams
             RemoteInit = self.RemoteInit
+            RemoteFirstPerCommitmentPoint = msg.FirstPerCommitmentPoint
+            FundingTxMinimumDepth = msg.MinimumDepth
+            RemoteParams = remoteParams
         }
         return destination, amount, channelWaitingForFundingTx
     }
