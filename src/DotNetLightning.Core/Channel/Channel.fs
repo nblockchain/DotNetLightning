@@ -75,7 +75,6 @@ and ChannelWaitingForFundingCreated = {
     ChannelOptions: ChannelOptions
     ChannelPrivKeys: ChannelPrivKeys
     NodeSecret: NodeSecret
-    TemporaryFailure: ChannelId
     LocalParams: LocalParams
     RemoteParams: RemoteParams
     RemoteChannelPubKeys: ChannelPubKeys
@@ -469,7 +468,6 @@ and Channel = {
                 ChannelOptions = channelOptions
                 ChannelPrivKeys = channelPrivKeys
                 NodeSecret = nodeSecret
-                TemporaryFailure = openChannelMsg.TemporaryChannelId
                 LocalParams = localParams
                 RemoteParams = remoteParams
                 RemoteChannelPubKeys = remoteChannelPubKeys
