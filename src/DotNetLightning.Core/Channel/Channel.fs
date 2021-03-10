@@ -23,7 +23,6 @@ type ChannelWaitingForFundingSigned = {
     LocalSpec: CommitmentSpec
     LocalCommitTx: CommitTx
     RemoteCommit: RemoteCommit
-    LastSent: FundingCreatedMsg
 } with
     member self.ApplyFundingSigned (msg: FundingSignedMsg)
                                        : Result<FinalizedTx * Channel, ChannelError> = result {
@@ -259,7 +258,6 @@ and ChannelWaitingForFundingTx = {
                 Spec = remoteSpec
                 RemotePerCommitmentPoint = self.LastReceived.FirstPerCommitmentPoint
             }
-            LastSent = nextMsg
         }
         return nextMsg, channelWaitingForFundingSigned
     }
