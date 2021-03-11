@@ -8,23 +8,9 @@ open DotNetLightning.Utils.Aether
 open ResultUtils
 open ResultUtils.Portability
 
-type internal Direction =
-    | In
-    | Out
-    with
-        member this.Opposite =
-            match this with
-            | In -> Out
-            | Out -> In
-
-
-type DirectedHTLC = internal {
-    Direction: Direction
-    Add: UpdateAddHTLCMsg
-}
-
 type CommitmentSpec = {
-    HTLCs: Map<HTLCId, DirectedHTLC>
+    OutgoingHTLCs: Map<HTLCId, UpdateAddHTLCMsg>
+    IncomingHTLCs: Map<HTLCId, UpdateAddHTLCMsg>
     FeeRatePerKw: FeeRatePerKw
     ToLocal: LNMoney
     ToRemote: LNMoney
@@ -32,14 +18,12 @@ type CommitmentSpec = {
     with
         static member Create (toLocal) (toRemote) (feeRate) =
             {
-                HTLCs = Map.empty
+                OutgoingHTLCs = Map.empty
+                IncomingHTLCs = Map.empty
                 FeeRatePerKw = feeRate
                 ToLocal = toLocal
                 ToRemote = toRemote
             }
-        static member internal HTLCs_: Lens<_, _> =
-            (fun cs -> cs.HTLCs),
-            (fun v cs -> { cs with HTLCs = v })
         static member internal  FeeRatePerKW_: Lens<_, _> =
             (fun cs -> cs.FeeRatePerKw),
             (fun v cs -> { cs with FeeRatePerKw = v })
@@ -50,40 +34,48 @@ type CommitmentSpec = {
             (fun cs -> cs.ToRemote),
             (fun v cs -> { cs with ToRemote = v })
 
-        member this.TotalFunds =
-            this.ToLocal + this.ToRemote + (this.HTLCs |> Seq.sumBy(fun h -> h.Value.Add.Amount))
+        member internal this.AddOutgoingMonoHopUnidirectionalPayment(update: MonoHopUnidirectionalPaymentMsg) =
+            { this with ToLocal = this.ToLocal - update.Amount; ToRemote = this.ToRemote + update.Amount }
 
-        member internal this.MonoHopUnidirectionalPayment(direction: Direction, update: MonoHopUnidirectionalPaymentMsg) =
-            match direction with
-            | Out -> { this with ToLocal = this.ToLocal - update.Amount; ToRemote = this.ToRemote + update.Amount }
-            | In ->  { this with ToLocal = this.ToLocal + update.Amount; ToRemote = this.ToRemote - update.Amount }
+        member internal this.AddIncomingMonoHopUnidirectionalPayment(update: MonoHopUnidirectionalPaymentMsg) =
+            { this with ToLocal = this.ToLocal + update.Amount; ToRemote = this.ToRemote - update.Amount }
 
-        member internal this.AddHTLC(direction: Direction, update: UpdateAddHTLCMsg) =
-            let htlc = { DirectedHTLC.Direction = direction; Add = update }
-            match direction with
-            | Out -> { this with ToLocal = (this.ToLocal - htlc.Add.Amount); HTLCs = this.HTLCs.Add(update.HTLCId, htlc)}
-            | In ->  { this with ToRemote = this.ToRemote - htlc.Add.Amount; HTLCs = this.HTLCs.Add(update.HTLCId, htlc)}
+        member internal this.AddOutgoingHTLC(update: UpdateAddHTLCMsg) =
+            { this with ToLocal = (this.ToLocal - update.Amount); OutgoingHTLCs = this.OutgoingHTLCs.Add(update.HTLCId, update)}
 
-        member internal this.FulfillHTLC(direction: Direction, htlcId: HTLCId) =
-            match this.HTLCs |> Map.filter(fun _k v  -> v.Direction <> direction) |>  Map.tryFind(htlcId), direction with
-            | Some htlc, Out ->
-                { this with ToLocal = this.ToLocal + htlc.Add.Amount; HTLCs = this.HTLCs.Remove htlcId }
+        member internal this.AddIncomingHTLC(update: UpdateAddHTLCMsg) =
+            { this with ToRemote = this.ToRemote - update.Amount; IncomingHTLCs = this.IncomingHTLCs.Add(update.HTLCId, update)}
+
+        member internal this.FulfillOutgoingHTLC(htlcId: HTLCId) =
+            match this.OutgoingHTLCs |> Map.tryFind htlcId with
+            | Some htlc ->
+                { this with ToLocal = this.ToLocal + htlc.Amount; OutgoingHTLCs = this.OutgoingHTLCs.Remove htlcId }
                 |> Ok
-            | Some htlc, In ->
-                { this with ToRemote = this.ToRemote + htlc.Add.Amount; HTLCs = this.HTLCs.Remove htlcId }
-                |> Ok
-            | None, _ ->
+            | None ->
                 UnknownHTLC htlcId |> Error
 
-        member internal this.FailHTLC(direction: Direction, htlcId: HTLCId) =
-            match this.HTLCs |> Map.filter(fun _k v -> v.Direction <> direction) |> Map.tryFind (htlcId), direction with
-            | Some htlc, Out ->
-                { this with ToRemote = this.ToRemote + htlc.Add.Amount; HTLCs = this.HTLCs.Remove htlcId }
+        member internal this.FulfillIncomingHTLC(htlcId: HTLCId) =
+            match this.IncomingHTLCs |> Map.tryFind htlcId with
+            | Some htlc ->
+                { this with ToRemote = this.ToRemote + htlc.Amount; IncomingHTLCs = this.IncomingHTLCs.Remove htlcId }
                 |> Ok
-            | Some htlc, In ->
-                { this with ToLocal = this.ToLocal + htlc.Add.Amount; HTLCs = this.HTLCs.Remove htlcId }
+            | None ->
+                UnknownHTLC htlcId |> Error
+
+        member internal this.FailOutgoingHTLC(htlcId: HTLCId) =
+            match this.OutgoingHTLCs |> Map.tryFind htlcId with
+            | Some htlc ->
+                { this with ToRemote = this.ToRemote + htlc.Amount; OutgoingHTLCs = this.OutgoingHTLCs.Remove htlcId }
                 |> Ok
-            | None, _ ->
+            | None ->
+                UnknownHTLC htlcId |> Error
+
+        member internal this.FailIncomingHTLC(htlcId: HTLCId) =
+            match this.IncomingHTLCs |> Map.tryFind htlcId with
+            | Some htlc ->
+                { this with ToLocal = this.ToLocal + htlc.Amount; IncomingHTLCs = this.IncomingHTLCs.Remove htlcId }
+                |> Ok
+            | None ->
                 UnknownHTLC htlcId |> Error
 
         member internal this.Reduce(localChanges: #IUpdateMsg list, remoteChanges: #IUpdateMsg list) =
@@ -91,7 +83,7 @@ type CommitmentSpec = {
                 localChanges
                 |> List.fold(fun (acc: CommitmentSpec) updateMsg ->
                         match box updateMsg with
-                        | :? MonoHopUnidirectionalPaymentMsg as u -> acc.MonoHopUnidirectionalPayment(Out, u)
+                        | :? MonoHopUnidirectionalPaymentMsg as u -> acc.AddOutgoingMonoHopUnidirectionalPayment u
                         | _ -> acc
                     )
                     this
@@ -100,7 +92,7 @@ type CommitmentSpec = {
                 remoteChanges
                 |> List.fold(fun (acc: CommitmentSpec) updateMsg ->
                         match box updateMsg with
-                        | :? MonoHopUnidirectionalPaymentMsg as u -> acc.MonoHopUnidirectionalPayment(In, u)
+                        | :? MonoHopUnidirectionalPaymentMsg as u -> acc.AddIncomingMonoHopUnidirectionalPayment u
                         | _ -> acc
                     )
                     specMonoHopUnidirectionalPaymentLocal
@@ -109,7 +101,7 @@ type CommitmentSpec = {
                 localChanges
                 |> List.fold(fun (acc: CommitmentSpec) updateMsg ->
                         match box updateMsg with
-                        | :? UpdateAddHTLCMsg as u -> acc.AddHTLC(Out, u)
+                        | :? UpdateAddHTLCMsg as u -> acc.AddOutgoingHTLC u
                         | _ -> acc
                     )
                     specMonoHopUnidirectionalPaymentRemote
@@ -118,7 +110,7 @@ type CommitmentSpec = {
                 remoteChanges
                 |> List.fold(fun (acc: CommitmentSpec) updateMsg ->
                         match box updateMsg with
-                        | :? UpdateAddHTLCMsg as u -> acc.AddHTLC(In, u)
+                        | :? UpdateAddHTLCMsg as u -> acc.AddIncomingHTLC u
                         | _ -> acc
                     )
                     spec1
@@ -128,11 +120,11 @@ type CommitmentSpec = {
                 |> List.fold(fun (acc: Result<CommitmentSpec, TransactionError>) updateMsg ->
                             match box updateMsg with
                             | :? UpdateFulfillHTLCMsg as u ->
-                                acc >>= fun a -> a.FulfillHTLC(Out, u.HTLCId)
+                                acc >>= fun a -> a.FulfillOutgoingHTLC u.HTLCId
                             | :? UpdateFailHTLCMsg as u ->
-                                acc >>= fun a -> a.FailHTLC(Out, u.HTLCId)
+                                acc >>= fun a -> a.FailOutgoingHTLC u.HTLCId
                             | :? UpdateFailMalformedHTLCMsg as u ->
-                                acc >>= fun a -> a.FailHTLC(Out, u.HTLCId)
+                                acc >>= fun a -> a.FailOutgoingHTLC u.HTLCId
                             | _ -> acc
                         )
                     (Ok spec2)
@@ -142,11 +134,11 @@ type CommitmentSpec = {
                 |> List.fold(fun (acc: Result<CommitmentSpec, TransactionError>) updateMsg ->
                             match box updateMsg with
                             | :? UpdateFulfillHTLCMsg as u ->
-                                acc >>= fun a -> a.FulfillHTLC(In, u.HTLCId)
+                                acc >>= fun a -> a.FulfillIncomingHTLC u.HTLCId
                             | :? UpdateFailHTLCMsg as u ->
-                                acc >>= fun a -> a.FailHTLC(In, u.HTLCId)
+                                acc >>= fun a -> a.FailIncomingHTLC u.HTLCId
                             | :? UpdateFailMalformedHTLCMsg as u ->
-                                acc >>= fun a -> a.FailHTLC(In, u.HTLCId)
+                                acc >>= fun a -> a.FailIncomingHTLC u.HTLCId
                             | _ -> acc
                     )
                     spec3RR
