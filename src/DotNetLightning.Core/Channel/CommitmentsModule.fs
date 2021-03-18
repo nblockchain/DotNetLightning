@@ -485,6 +485,7 @@ module RemoteForceClose =
     let tryGetFundsFromRemoteCommitmentTx (commitments: Commitments)
                                           (localChannelPrivKeys: ChannelPrivKeys)
                                           (staticChannelConfig: StaticChannelConfig)
+                                          (remotePerCommitmentSecrets: PerCommitmentSecretStore)
                                           (transaction: Transaction)
                                               : Option<TransactionBuilder> = option {
         let! obscuredCommitmentNumber =
@@ -499,7 +500,7 @@ module RemoteForceClose =
                 localChannelPubKeys.PaymentBasepoint
                 remoteChannelPubKeys.PaymentBasepoint
         let perCommitmentSecretOpt =
-            commitments.RemotePerCommitmentSecrets.GetPerCommitmentSecret commitmentNumber
+            remotePerCommitmentSecrets.GetPerCommitmentSecret commitmentNumber
         let! perCommitmentPoint =
             match perCommitmentSecretOpt with
             | Some perCommitmentSecret -> Some <| perCommitmentSecret.PerCommitmentPoint()
@@ -617,6 +618,7 @@ module RemoteForceClose =
     let getFundsFromForceClosingTransaction (commitments: Commitments)
                                             (localChannelPrivKeys: ChannelPrivKeys)
                                             (staticChannelConfig: StaticChannelConfig)
+                                            (remotePerCommitmentSecrets: PerCommitmentSecretStore)
                                             (transaction: Transaction)
                                                 : Option<TransactionBuilder> =
         let attemptsSeq = seq {
@@ -625,6 +627,7 @@ module RemoteForceClose =
                     commitments
                     localChannelPrivKeys
                     staticChannelConfig
+                    remotePerCommitmentSecrets
                     transaction
             yield
                 tryGetFundsFromLocalCommitmentTx
