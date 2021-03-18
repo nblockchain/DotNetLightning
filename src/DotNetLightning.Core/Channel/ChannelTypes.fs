@@ -46,3 +46,7 @@ type ClosingSignedResponse =
     | NewClosingSigned of ClosingSignedMsg
     | MutualClose of FinalizedTx
 
+type SavedChannelState = {
+    StaticChannelConfig: StaticChannelConfig
+}
+

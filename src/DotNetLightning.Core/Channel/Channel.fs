@@ -52,7 +52,9 @@ type ChannelWaitingForFundingSigned = {
             RemotePerCommitmentSecrets = PerCommitmentSecretStore()
         }
         let channel = {
-            StaticChannelConfig = self.StaticChannelConfig
+            SavedChannelState = {
+                StaticChannelConfig = self.StaticChannelConfig
+            }
             ChannelOptions = self.ChannelOptions
             ChannelPrivKeys = self.ChannelPrivKeys
             NodeSecret = self.NodeSecret
@@ -162,7 +164,9 @@ and ChannelWaitingForFundingCreated = {
             Signature = !>localSigOfRemoteCommit.Signature
         }
         let channel = {
-            StaticChannelConfig = staticChannelConfig
+            SavedChannelState = {
+                StaticChannelConfig = staticChannelConfig
+            }
             ChannelOptions = self.ChannelOptions
             ChannelPrivKeys = self.ChannelPrivKeys
             NodeSecret = self.NodeSecret
@@ -321,7 +325,8 @@ and ChannelWaitingForAcceptChannel = {
     }
 
 and Channel = {
-    StaticChannelConfig: StaticChannelConfig
+    //StaticChannelConfig: StaticChannelConfig
+    SavedChannelState: SavedChannelState
     ChannelOptions: ChannelOptions
     ChannelPrivKeys: ChannelPrivKeys
     NodeSecret: NodeSecret
@@ -487,7 +492,7 @@ and Channel = {
     member self.CreateChannelReestablish (): ChannelReestablishMsg =
         let commitmentSeed = self.ChannelPrivKeys.CommitmentSeed
         let ourChannelReestablish = {
-            ChannelId = self.StaticChannelConfig.ChannelId()
+            ChannelId = self.SavedChannelState.StaticChannelConfig.ChannelId()
             NextCommitmentNumber =
                 (self.Commitments.RemotePerCommitmentSecrets.NextCommitmentNumber().NextCommitment())
             NextRevocationNumber =
@@ -530,7 +535,7 @@ and Channel = {
                                               : Result<Channel * Option<FundingLockedMsg>, ChannelError> = result {
         match self.ShortChannelId with
         | None ->
-            if self.StaticChannelConfig.FundingTxMinimumDepth > depth then
+            if self.SavedChannelState.StaticChannelConfig.FundingTxMinimumDepth > depth then
                 // TODO: this should probably be an error (?)
                 return self, None
             else
@@ -538,7 +543,7 @@ and Channel = {
                     self.ChannelPrivKeys.CommitmentSeed.DerivePerCommitmentPoint
                         (CommitmentNumber.FirstCommitment.NextCommitment())
                 let msgToSend: FundingLockedMsg = {
-                    ChannelId = self.StaticChannelConfig.ChannelId()
+                    ChannelId = self.SavedChannelState.StaticChannelConfig.ChannelId()
                     NextPerCommitmentPoint = nextPerCommitmentPoint
                 }
 
@@ -552,7 +557,7 @@ and Channel = {
                     ShortChannelId.BlockHeight = height;
                     BlockIndex = txindex
                     TxOutIndex =
-                        self.StaticChannelConfig.FundingScriptCoin.Outpoint.N
+                        self.SavedChannelState.StaticChannelConfig.FundingScriptCoin.Outpoint.N
                         |> uint16
                         |> TxOutIndex
                 }
@@ -562,7 +567,7 @@ and Channel = {
                 }
                 return channel, Some msgToSend
         | Some _shortChannelId ->
-            if (self.StaticChannelConfig.FundingTxMinimumDepth <= depth) then
+            if (self.SavedChannelState.StaticChannelConfig.FundingTxMinimumDepth <= depth) then
                 return self, None
             else
                 return! Error <| OnceConfirmedFundingTxHasBecomeUnconfirmed(height, depth)
@@ -578,7 +583,7 @@ and Channel = {
                 |> apiMisuse
         else
             let payment: MonoHopUnidirectionalPaymentMsg = {
-                ChannelId = self.StaticChannelConfig.ChannelId()
+                ChannelId = self.SavedChannelState.StaticChannelConfig.ChannelId()
                 Amount = amount
             }
             let commitments1 = self.Commitments.AddLocalProposal(payment)
@@ -593,7 +598,7 @@ and Channel = {
             do!
                 Validation.checkOurMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec
                     reduced
-                    self.StaticChannelConfig
+                    self.SavedChannelState.StaticChannelConfig
                     payment
             let channel = {
                 self with
@@ -612,7 +617,7 @@ and Channel = {
         do!
             Validation.checkTheirMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec
                 reduced
-                self.StaticChannelConfig
+                self.SavedChannelState.StaticChannelConfig
                 msg
         return {
             self with
@@ -627,9 +632,9 @@ and Channel = {
                 sprintf "Could not add new HTLC %A since shutdown is already in progress." op
                 |> apiMisuse
         else
-            do! Validation.checkOperationAddHTLC self.StaticChannelConfig.RemoteParams op
+            do! Validation.checkOperationAddHTLC self.SavedChannelState.StaticChannelConfig.RemoteParams op
             let add: UpdateAddHTLCMsg = {
-                ChannelId = self.StaticChannelConfig.ChannelId()
+                ChannelId = self.SavedChannelState.StaticChannelConfig.ChannelId()
                 HTLCId = self.Commitments.LocalNextHTLCId
                 Amount = op.Amount
                 PaymentHash = op.PaymentHash
@@ -661,7 +666,7 @@ and Channel = {
             do!
                 Validation.checkOurUpdateAddHTLCIsAcceptableWithCurrentSpec
                     reduced
-                    self.StaticChannelConfig
+                    self.SavedChannelState.StaticChannelConfig
                     add
             let channel = {
                 self with
@@ -676,7 +681,7 @@ and Channel = {
         do!
             Validation.checkTheirUpdateAddHTLCIsAcceptable
                 self.Commitments
-                self.StaticChannelConfig.LocalParams
+                self.SavedChannelState.StaticChannelConfig.LocalParams
                 msg
                 height
         let commitments1 = {
@@ -691,7 +696,7 @@ and Channel = {
         do!
             Validation.checkTheirUpdateAddHTLCIsAcceptableWithCurrentSpec
                 reduced
-                self.StaticChannelConfig
+                self.SavedChannelState.StaticChannelConfig
                 msg
         return {
             self with
@@ -707,7 +712,7 @@ and Channel = {
             Commitments.sendFulfill
                 cmd
                 self.Commitments
-                self.StaticChannelConfig
+                self.SavedChannelState.StaticChannelConfig
                 remoteNextCommitInfo
 
         let channel = {
@@ -737,7 +742,7 @@ and Channel = {
                 self.NodeSecret
                 op
                 self.Commitments
-                self.StaticChannelConfig
+                self.SavedChannelState.StaticChannelConfig
                 remoteNextCommitInfo
         let channel = {
             self with
@@ -754,7 +759,7 @@ and Channel = {
             Commitments.sendFailMalformed
                 op
                 self.Commitments
-                self.StaticChannelConfig
+                self.SavedChannelState.StaticChannelConfig
                 remoteNextCommitInfo
         let channel = {
             self with
@@ -791,7 +796,7 @@ and Channel = {
         let! _remoteNextCommitInfo =
             self.RemoteNextCommitInfoIfFundingLockedNormal "UpdateFee"
         let! updateFeeMsg, newCommitments =
-            Commitments.sendFee op self.StaticChannelConfig self.Commitments
+            Commitments.sendFee op self.SavedChannelState.StaticChannelConfig self.Commitments
         let channel = {
             self with
                 Commitments = newCommitments
@@ -809,7 +814,7 @@ and Channel = {
                 self.ChannelOptions
                 localFeerate
                 msg
-                self.StaticChannelConfig
+                self.SavedChannelState.StaticChannelConfig
                 self.Commitments
         return {
             self with
@@ -830,7 +835,7 @@ and Channel = {
                 Commitments.sendCommit
                     self.ChannelPrivKeys
                     cm
-                    self.StaticChannelConfig
+                    self.SavedChannelState.StaticChannelConfig
                     remoteNextCommitInfo
             let channel = {
                 self with
@@ -852,7 +857,7 @@ and Channel = {
             Commitments.receiveCommit
                 self.ChannelPrivKeys
                 msg
-                self.StaticChannelConfig
+                self.SavedChannelState.StaticChannelConfig
                 self.Commitments
         let channel = {
             self with
@@ -909,12 +914,12 @@ and Channel = {
             do! Error <| cannotCloseChannel "shutdown is already in progress"
         do!
             Validation.checkShutdownScriptPubKeyAcceptable
-                self.StaticChannelConfig.LocalStaticShutdownScriptPubKey
+                self.SavedChannelState.StaticChannelConfig.LocalStaticShutdownScriptPubKey
                 localShutdownScriptPubKey
         if (self.Commitments.LocalHasUnsignedOutgoingHTLCs()) then
             do! Error <| cannotCloseChannel "Cannot close with unsigned outgoing htlcs"
         let shutdownMsg: ShutdownMsg = {
-            ChannelId = self.StaticChannelConfig.ChannelId()
+            ChannelId = self.SavedChannelState.StaticChannelConfig.ChannelId()
             ScriptPubKey = localShutdownScriptPubKey
         }
         let channel = {
@@ -942,7 +947,7 @@ and Channel = {
                                        (closingFee: Money) = result {
         let channelPrivKeys = self.ChannelPrivKeys
         let cm = self.Commitments
-        let staticChannelConfig = self.StaticChannelConfig
+        let staticChannelConfig = self.SavedChannelState.StaticChannelConfig
         let dustLimitSatoshis = Money.Max(staticChannelConfig.LocalParams.DustLimitSatoshis, staticChannelConfig.RemoteParams.DustLimitSatoshis)
         let! closingTx = Transactions.makeClosingTx staticChannelConfig.FundingScriptCoin (localSpk) (remoteSpk) staticChannelConfig.IsFunder (dustLimitSatoshis) (closingFee) (cm.LocalCommit.Spec) staticChannelConfig.Network
         let localSignature, psbtUpdated = channelPrivKeys.SignWithFundingPrivKey closingTx.Value
@@ -958,7 +963,7 @@ and Channel = {
                                          (remoteSpk: ShutdownScriptPubKey) = result {
         let cm = self.Commitments
         let feeEst = self.ChannelOptions.FeeEstimator
-        let staticChannelConfig = self.StaticChannelConfig
+        let staticChannelConfig = self.SavedChannelState.StaticChannelConfig
         let! dummyClosingTx = Transactions.makeClosingTx staticChannelConfig.FundingScriptCoin localSpk remoteSpk staticChannelConfig.IsFunder Money.Zero Money.Zero cm.LocalCommit.Spec staticChannelConfig.Network
         let tx = dummyClosingTx.Value.GetGlobalTransaction()
         tx.Inputs.[0].WitScript <-
@@ -978,11 +983,11 @@ and Channel = {
         let remoteShutdownScriptPubKey = msg.ScriptPubKey
         do!
             Validation.checkShutdownScriptPubKeyAcceptable
-                self.StaticChannelConfig.LocalStaticShutdownScriptPubKey
+                self.SavedChannelState.StaticChannelConfig.LocalStaticShutdownScriptPubKey
                 localShutdownScriptPubKey
         do!
             Validation.checkShutdownScriptPubKeyAcceptable
-                self.StaticChannelConfig.RemoteStaticShutdownScriptPubKey
+                self.SavedChannelState.StaticChannelConfig.RemoteStaticShutdownScriptPubKey
                 remoteShutdownScriptPubKey
         let cm = self.Commitments
         // They have pending unsigned htlcs => they violated the spec, close the channel
@@ -1019,7 +1024,7 @@ and Channel = {
                 | Some remoteNextCommitInfo -> cm.HasNoPendingHTLCs remoteNextCommitInfo
             if hasNoPendingHTLCs then
                 // we have to send first closing_signed msg iif we are the funder
-                if self.StaticChannelConfig.IsFunder then
+                if self.SavedChannelState.StaticChannelConfig.IsFunder then
                     let! closingFee =
                         self.FirstClosingFee
                             localShutdownScriptPubKey
@@ -1056,7 +1061,7 @@ and Channel = {
                     return channel, None, None
             else
                 let localShutdownMsg: ShutdownMsg = {
-                    ChannelId = self.StaticChannelConfig.ChannelId()
+                    ChannelId = self.SavedChannelState.StaticChannelConfig.ChannelId()
                     ScriptPubKey = localShutdownScriptPubKey
                 }
                 let channel = {
@@ -1084,9 +1089,9 @@ and Channel = {
             | (None, None) ->
                 Error ReceivedClosingSignedBeforeSendingOrReceivingShutdown
         let cm = self.Commitments
-        let remoteChannelKeys = self.StaticChannelConfig.RemoteChannelPubKeys
+        let remoteChannelKeys = self.SavedChannelState.StaticChannelConfig.RemoteChannelPubKeys
         let lastCommitFeeSatoshi =
-            self.StaticChannelConfig.FundingScriptCoin.TxOut.Value - (cm.LocalCommit.PublishableTxs.CommitTx.Value.TotalOut)
+            self.SavedChannelState.StaticChannelConfig.FundingScriptCoin.TxOut.Value - (cm.LocalCommit.PublishableTxs.CommitTx.Value.TotalOut)
         do! checkRemoteProposedHigherFeeThanBaseFee lastCommitFeeSatoshi msg.FeeSatoshis
         do!
             checkRemoteProposedFeeWithinNegotiatedRange
