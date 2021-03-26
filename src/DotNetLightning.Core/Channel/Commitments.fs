@@ -12,17 +12,13 @@ open ResultUtils
 open ResultUtils.Portability
 
 type LocalChanges = {
-    Proposed: IUpdateMsg list
     Signed: IUpdateMsg list
     ACKed: IUpdateMsg list
 }
     with
-        static member Zero = { Proposed = []; Signed = []; ACKed = [] }
+        static member Zero = { Signed = []; ACKed = [] }
 
         // -- lenses
-        static member Proposed_: Lens<_, _> =
-            (fun lc -> lc.Proposed),
-            (fun ps lc -> { lc with Proposed = ps })
         static member Signed_: Lens<_, _> =
             (fun lc -> lc.Signed),
             (fun v lc -> { lc with Signed = v })
@@ -30,9 +26,6 @@ type LocalChanges = {
         static member ACKed_: Lens<_, _> =
             (fun lc -> lc.ACKed),
             (fun v lc -> { lc with ACKed = v })
-
-        member this.All() =
-            this.Proposed @ this.Signed @ this.ACKed
 
 type RemoteChanges = { 
     Proposed: IUpdateMsg list
@@ -101,6 +94,7 @@ type RemoteNextCommitInfo =
             | Revoked perCommitmentPoint -> perCommitmentPoint
 
 type Commitments = {
+    ProposedLocalChanges: list<IUpdateMsg>
     LocalChanges: LocalChanges
     RemoteChanges: RemoteChanges
     LocalNextHTLCId: HTLCId
@@ -116,8 +110,10 @@ type Commitments = {
             (fun v c -> { c with RemoteChanges = v })
 
         member this.AddLocalProposal(proposal: IUpdateMsg) =
-            let lens = Commitments.LocalChanges_ >-> LocalChanges.Proposed_
-            Optic.map lens (fun proposalList -> proposal :: proposalList) this
+            {
+                this with
+                    ProposedLocalChanges = proposal :: this.ProposedLocalChanges
+            }
 
         member this.AddRemoteProposal(proposal: IUpdateMsg) =
             let lens = Commitments.RemoteChanges_ >-> RemoteChanges.Proposed_
@@ -127,13 +123,13 @@ type Commitments = {
         member this.IncrRemoteHTLCId() = { this with RemoteNextHTLCId = this.RemoteNextHTLCId + 1UL }
 
         member this.LocalHasChanges() =
-            (not this.RemoteChanges.ACKed.IsEmpty) || (not this.LocalChanges.Proposed.IsEmpty)
+            (not this.RemoteChanges.ACKed.IsEmpty) || (not this.ProposedLocalChanges.IsEmpty)
 
         member this.RemoteHasChanges() =
             (not this.LocalChanges.ACKed.IsEmpty) || (not this.RemoteChanges.Proposed.IsEmpty)
 
         member internal this.LocalHasUnsignedOutgoingHTLCs() =
-            this.LocalChanges.Proposed |> List.exists(fun p -> match p with | :? UpdateAddHTLCMsg -> true | _ -> false)
+            this.ProposedLocalChanges |> List.exists(fun p -> match p with | :? UpdateAddHTLCMsg -> true | _ -> false)
 
         member internal this.RemoteHasUnsignedOutgoingHTLCs() =
             this.RemoteChanges.Proposed |> List.exists(fun p -> match p with | :? UpdateAddHTLCMsg -> true | _ -> false)
@@ -150,7 +146,7 @@ type Commitments = {
             let reducedRes =
                 remoteCommit.Spec.Reduce(
                     this.RemoteChanges.ACKed,
-                    this.LocalChanges.Proposed
+                    this.ProposedLocalChanges
                 )
             let reduced =
                 match reducedRes with
