@@ -93,20 +93,11 @@ type RemoteNextCommitInfo =
 type Commitments = {
     ProposedLocalChanges: list<IUpdateMsg>
     ProposedRemoteChanges: list<IUpdateMsg>
-    LocalChanges: LocalChanges
-    RemoteChanges: RemoteChanges
     LocalNextHTLCId: HTLCId
     RemoteNextHTLCId: HTLCId
     OriginChannels: Map<HTLCId, HTLCSource>
 }
     with
-        static member LocalChanges_: Lens<_, _> =
-            (fun c -> c.LocalChanges),
-            (fun v c -> { c with LocalChanges = v })
-        static member RemoteChanges_: Lens<_, _> =
-            (fun c -> c.RemoteChanges),
-            (fun v c -> { c with RemoteChanges = v })
-
         member this.AddLocalProposal(proposal: IUpdateMsg) =
             {
                 this with
@@ -122,54 +113,9 @@ type Commitments = {
         member this.IncrLocalHTLCId() = { this with LocalNextHTLCId = this.LocalNextHTLCId + 1UL }
         member this.IncrRemoteHTLCId() = { this with RemoteNextHTLCId = this.RemoteNextHTLCId + 1UL }
 
-        member this.LocalHasChanges() =
-            (not this.RemoteChanges.ACKed.IsEmpty) || (not this.ProposedLocalChanges.IsEmpty)
-
-        member this.RemoteHasChanges() =
-            (not this.LocalChanges.ACKed.IsEmpty) || (not this.ProposedRemoteChanges.IsEmpty)
-
         member internal this.LocalHasUnsignedOutgoingHTLCs() =
             this.ProposedLocalChanges |> List.exists(fun p -> match p with | :? UpdateAddHTLCMsg -> true | _ -> false)
 
         member internal this.RemoteHasUnsignedOutgoingHTLCs() =
             this.ProposedRemoteChanges |> List.exists(fun p -> match p with | :? UpdateAddHTLCMsg -> true | _ -> false)
 
-        member this.SpendableBalance (localIsFunder: bool)
-                                     (remoteParams: RemoteParams)
-                                     (remoteCommit: RemoteCommit)
-                                     (remoteNextCommitInfo: RemoteNextCommitInfo)
-                                         : LNMoney =
-            let remoteCommit =
-                match remoteNextCommitInfo with
-                | RemoteNextCommitInfo.Waiting nextRemoteCommit -> nextRemoteCommit
-                | RemoteNextCommitInfo.Revoked _info -> remoteCommit
-            let reducedRes =
-                remoteCommit.Spec.Reduce(
-                    this.RemoteChanges.ACKed,
-                    this.ProposedLocalChanges
-                )
-            let reduced =
-                match reducedRes with
-                | Error err ->
-                    failwithf
-                        "reducing commit failed even though we have not proposed any changes\
-                        error: %A"
-                        err
-                | Ok reduced -> reduced
-            let fees =
-                if localIsFunder then
-                    Transactions.commitTxFee remoteParams.DustLimitSatoshis reduced
-                    |> LNMoney.FromMoney
-                else
-                    LNMoney.Zero
-            let channelReserve =
-                remoteParams.ChannelReserveSatoshis
-                |> LNMoney.FromMoney
-            let totalBalance = reduced.ToRemote
-            let untrimmedSpendableBalance = totalBalance - channelReserve - fees
-            let dustLimit =
-                remoteParams.DustLimitSatoshis
-                |> LNMoney.FromMoney
-            let untrimmedMax = LNMoney.Min(untrimmedSpendableBalance, dustLimit)
-            let spendableBalance = LNMoney.Max(untrimmedMax, untrimmedSpendableBalance)
-            spendableBalance
