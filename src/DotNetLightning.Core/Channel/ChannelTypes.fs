@@ -306,7 +306,7 @@ type ChannelEvent =
     | AcceptedShutdownWhenWeHavePendingHTLCs of nextState: ShutdownData
 
     // ------ closing ------
-    | MutualClosePerformed of txToPublish: FinalizedTx * nextState : ClosingData
+    | MutualClosePerformed of txToPublish: FinalizedTx * nextState : ClosingData * nextMsgToSend: Option<ClosingSignedMsg>
     | WeProposedNewClosingSigned of msgToSend: ClosingSignedMsg * nextState: NegotiatingData
     // -------- else ---------
     | Closed
