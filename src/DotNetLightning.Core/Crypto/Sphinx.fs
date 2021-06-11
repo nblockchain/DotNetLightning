@@ -170,12 +170,10 @@ module Sphinx =
          sharedSecret: byte[],
          packet: OnionPacket,
          routingInfoFiller: byte[] option) =
-        if (payload.Length <> PayloadLength) then
-            failwithf "Payload length is not %A" PayloadLength
-        else
+            let payloadLen = payload.Length
             let filler = defaultArg routingInfoFiller ([||])
             let nextRoutingInfo =
-                let routingInfo1 = seq [ payload; packet.HMAC.ToBytes(); (packet.HopData |> Array.skipBack(PayloadLength + MacLength)) ]
+                let routingInfo1 = seq [ payload; packet.HMAC.ToBytes(); (packet.HopData |> Array.skipBack(payloadLen + MacLength)) ]
                                    |> Array.concat
                 let routingInfo2 =
                     let rho = generateKey("rho", sharedSecret)
