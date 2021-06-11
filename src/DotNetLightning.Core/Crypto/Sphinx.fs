@@ -194,6 +194,20 @@ module Sphinx =
                               HMAC = nextHmac }
             nextPacket
 
+    module PacketFiller =
+        // DeterministicPacketFiller is a packet filler that generates a deterministic
+        // set of filler bytes by using chacha20 with a key derived from the session
+        // key.
+        let DeterministicPacketFiller (sessionKey: Key) =
+            generateStream(generateKey("pad",sessionKey.ToBytes()), 1300)
+
+        // BlankPacketFiller is a packet filler that doesn't attempt to fill out the
+        // packet at all. It should ONLY be used for generating test vectors or other
+        // instances that required deterministic packet generation.
+        [<Obsolete("BlankPacketFiller is obsolete, see here: https://github.com/lightningnetwork/lightning-rfc/commit/8dd0b75809c9a7498bb9031a6674e5f58db509f4", false)>]
+        let BlankPacketFiller _=
+            Array.zeroCreate 1300
+
     type PacketAndSecrets = {
         Packet: OnionPacket
         /// Shared secrets (one per node in the route). Known (and needed) only if you're creating the
@@ -201,7 +215,7 @@ module Sphinx =
         SharedSecrets: (Key * PubKey) list
     }
         with
-            static member Create (sessionKey: Key, pubKeys: PubKey list, payloads: byte[] list, ad: byte[]) =
+            static member Create (sessionKey: Key, pubKeys: PubKey list, payloads: byte[] list, ad: byte[], initialPacketFiller: Key -> byte[]) =
                 let (ephemeralPubKeys, sharedSecrets) = computeEphemeralPublicKeysAndSharedSecrets (sessionKey) (pubKeys)
                 let filler = generateFiller "rho" payloads sharedSecrets
 
@@ -209,7 +223,7 @@ module Sphinx =
                                                 ad,
                                                 ephemeralPubKeys |> List.last,
                                                 (sharedSecrets |> List.last |> fun ss -> ss.ToBytes()),
-                                                OnionPacket.LastPacket,
+                                                {OnionPacket.LastPacket with HopData = initialPacketFiller(sessionKey)},
                                                 Some(filler))
                 let rec loop (hopPayloads: byte[] list, ephKeys: PubKey list, ss: Key list, packet: OnionPacket) =
                     if (hopPayloads.IsEmpty) then
