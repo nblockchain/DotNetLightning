@@ -67,7 +67,7 @@ let bolt4Tests1 =
 
         testCase "generate filler" <| fun _ ->
             let (_, sharedSecrets) = computeEphemeralPublicKeysAndSharedSecrets sessionKey pubKeys
-            let filler = generateFiller "rho" sharedSecrets.[0..sharedSecrets.Length - 2] (PayloadLength + MacLength) (Some(20))
+            let filler = generateFiller "rho" payloads sharedSecrets
             let expectedFiller = "c6b008cf6414ed6e4c42c291eb505e9f22f5fe7d0ecdd15a833f4d016ac974d33adc6ea3293e20859e87ebfb937ba406abd025d14af692b12e9c9c2adbe307a679779259676211c071e614fdb386d1ff02db223a5b2fae03df68d321c7b29f7c7240edd3fa1b7cb6903f89dc01abf41b2eb0b49b6b8d73bb0774b58204c0d0e96d3cce45ad75406be0bc009e327b3e712a4bd178609c00b41da2daf8a4b0e1319f07a492ab4efb056f0f599f75e6dc7e0d10ce1cf59088ab6e873de377343880f7a24f0e36731a0b72092f8d5bc8cd346762e93b2bf203d00264e4bc136fc142de8f7b69154deb05854ea88e2d7506222c95ba1aab065c8a851391377d3406a35a9af3ac" |> hex.DecodeData
             Expect.equal filler expectedFiller ""
 
