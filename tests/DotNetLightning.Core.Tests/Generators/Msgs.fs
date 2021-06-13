@@ -601,7 +601,7 @@ let gossipTimestampFilterGen: Gen<GossipTimestampFilterMsg> = gen {
 
 let private hopPayloadTlvGen =
     let paymentDataGen: Gen<_ * _> =
-        ((PaymentPreimage.Create <!> bytesOfNGen(32)), (lnMoneyGen))
+        ((PaymentSecret.Create <!> uint256Gen), (lnMoneyGen))
         ||> Gen.map2(fun a b -> (a, b))
     Gen.frequency
         [(1, AmountToForward <!> lnMoneyGen)
