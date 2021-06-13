@@ -59,6 +59,47 @@ type System.UInt64 with
             buf.[8] <- (byte x)
             buf
         
+    member private x.GetLeadingZerosCount() =
+        if x = 0UL then
+            8
+        elif x &&& 0xffffffffffffff00UL = 0UL then
+            7
+        elif x &&& 0xffffffffffff0000UL = 0UL then
+            6
+        elif x &&& 0xffffffffff000000UL = 0UL then
+            5
+        elif x &&& 0xffffffff00000000UL = 0UL then
+            4
+        elif x &&& 0xffffff0000000000UL = 0UL then
+            3
+        elif x &&& 0xffff000000000000UL = 0UL then
+            2
+        elif x &&& 0xff00000000000000UL = 0UL then
+            1
+        else
+            0
+
+    member x.GetTruncatedBytes() =
+        let numZeros =
+            x.GetLeadingZerosCount()
+        x.GetBytesBigEndian() |> Array.skip numZeros
+
+    //TODO: better error handling?
+    static member FromTruncatedBytes(bytes: array<byte>): uint64 =
+        let len = Array.length bytes
+        if len > 8 then
+            failwith "incorrect truncated bytes length"
+        else
+            let num =
+                [Array.zeroCreate (8-len); bytes]
+                |> Array.concat
+                |> UInt64.FromBytesBigEndian
+
+            if 8 - num.GetLeadingZerosCount() <> len then
+                failwith "truncated uint not minimally encoded"
+
+            num
+
 type System.UInt32 with
     member this.GetBytesBigEndian() =
         let d = BitConverter.GetBytes(this)
@@ -71,6 +112,39 @@ type System.UInt32 with
             else
                 bytes4
         BitConverter.ToUInt32(bytes, 0)
+
+    member private x.GetLeadingZerosCount() =
+        if x = 0u then
+            4
+        elif x &&& 0xffffff00u = 0u then
+            3
+        elif x &&& 0xffff0000u = 0u then
+            2
+        elif x &&& 0xff000000u = 0u then
+            1
+        else
+            0
+
+    member x.GetTruncatedBytes() =
+        let numZeros =
+            x.GetLeadingZerosCount()
+        x.GetBytesBigEndian() |> Array.skip numZeros
+
+    //FIXME: This should return a result
+    static member FromTruncatedBytes(bytes: array<byte>): uint32 =
+        let len = Array.length bytes
+        if len > 4 then
+            failwith "incorrect truncated bytes length"
+        else
+            let num =
+                [Array.zeroCreate (4-len); bytes]
+                |> Array.concat
+                |> UInt32.FromBytesBigEndian
+
+            if 4 - num.GetLeadingZerosCount() <> len then
+                failwith "truncated uint not minimally encoded"
+
+            num
 
 type System.UInt16 with
     member this.GetBytesBigEndian() =

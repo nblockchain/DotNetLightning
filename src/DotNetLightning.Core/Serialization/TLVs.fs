@@ -2,6 +2,7 @@ namespace DotNetLightning.Serialization
 
 
 open DotNetLightning.Utils
+open DotNetLightning.Core.Utils.Extensions
 open System
 open NBitcoin
 
@@ -172,31 +173,31 @@ type HopPayloadTLV =
     static member FromGenericTLV(tlv: GenericTLV) =
         match tlv.Type with
         | 2UL ->
-            NBitcoin.Utils.ToUInt64(tlv.Value, false)
+            UInt64.FromTruncatedBytes tlv.Value
             |> LNMoney.MilliSatoshis
             |> AmountToForward
         | 4UL ->
-            NBitcoin.Utils.ToUInt32(tlv.Value, false)
+            UInt32.FromTruncatedBytes tlv.Value
             |> OutgoingCLTV
         | 6UL ->
-            ShortChannelId.From8Bytes(tlv.Value)
+            ShortChannelId.From8Bytes tlv.Value
             |> ShortChannelId
         | 8UL ->
             let secret = tlv.Value.[0..PaymentPreimage.LENGTH - 1] |> PaymentPreimage.Create
-            let totalMSat = NBitcoin.Utils.ToUInt64(tlv.Value.[PaymentPreimage.LENGTH..], false) |> LNMoney.MilliSatoshis
+            let totalMSat = UInt64.FromTruncatedBytes tlv.Value.[PaymentPreimage.LENGTH..] |> LNMoney.MilliSatoshis
             (secret, totalMSat) |> PaymentData
         | _ -> Unknown tlv
         
     member this.ToGenericTLV() =
         match this with
         | AmountToForward x ->
-            { Type = 2UL; Value = Utils.ToBytes(uint64 x.MilliSatoshi, false) }
+            { Type = 2UL; Value = (uint64 x.MilliSatoshi).GetTruncatedBytes() }
         | OutgoingCLTV x ->
-            { Type = 4UL; Value = Utils.ToBytes(x, false) }
+            { Type = 4UL; Value = (uint32 x).GetTruncatedBytes() }
         | ShortChannelId x ->
             { Type = 6UL; Value = x.ToBytes() }
         | PaymentData(secret, amount) ->
-            let value = Array.concat[ secret.ToByteArray(); Utils.ToBytes(uint64 amount.MilliSatoshi, false) ]
+            let value = Array.concat[ secret.ToByteArray(); (uint64 amount.MilliSatoshi).GetTruncatedBytes() ]
             { Type = 8UL; Value = value }
         | Unknown x -> x
             
