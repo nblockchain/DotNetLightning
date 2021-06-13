@@ -215,6 +215,33 @@ module Primitives =
                 member this.ToPubKey() =
                     this.ToPrivKey().PubKey
 
+    type PaymentSecret =
+        private PaymentSecret of uint256
+            with
+                // as per BOLT-2:
+                static member LENGTH = 32
+
+                static member Create(secret: uint256) =
+                    PaymentSecret secret
+
+                static member FromByteArray(secretBytes: array<byte>) =
+                    uint256(secretBytes, false)
+                    |> PaymentSecret
+
+                member this.Value =
+                    let (PaymentSecret v) = this in v
+
+                member this.ToHex() =
+                    let h = NBitcoin.DataEncoders.HexEncoder()
+                    let ba: byte[] = this.ToByteArray()
+                    ba |> h.EncodeData
+
+                member this.ToBytes() =
+                    this.Value.ToBytes(false)
+
+                member this.ToByteArray() =
+                    this.Value.ToBytes(false) |> Array.ofSeq
+
     let (|PaymentPreimage|) x =
         match x with
         | PaymentPreimage x -> x
