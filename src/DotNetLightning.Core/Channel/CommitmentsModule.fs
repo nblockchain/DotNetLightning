@@ -176,7 +176,7 @@ module internal Commitments =
                     match cm.OriginChannels.TryGetValue(msg.HTLCId) with
                     | true, origin -> Ok origin
                     | false, _ ->
-                        msg.HTLCId |> htlcOriginNowKnown
+                        msg.HTLCId |> htlcOriginNotKnown
                 let nextC = cm.AddRemoteProposal(msg)
                 return [WeAcceptedFailHTLC(o, htlc, nextC)]
             }
@@ -214,7 +214,7 @@ module internal Commitments =
                         match cm.OriginChannels.TryGetValue(msg.HTLCId) with
                         | true, o -> Ok o
                         | false, _ ->
-                            msg.HTLCId |> htlcOriginNowKnown
+                            msg.HTLCId |> htlcOriginNotKnown
                     let nextC = cm.AddRemoteProposal(msg)
                     return [WeAcceptedFailMalformedHTLC(o, htlc, nextC)]
                 }
