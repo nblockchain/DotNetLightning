@@ -476,6 +476,18 @@ and Channel = {
                 return (acceptChannelMsg, channelWaitingForFundingCreated)
             }
 
+        member this.SpendableBalance(): LNMoney =
+            let remoteNextCommitInfoOpt =
+                match this.State with
+                | ChannelState.WaitForFundingConfirmed _ -> None
+                | ChannelState.WaitForFundingLocked _ -> None
+                | ChannelState.Normal data -> Some data.RemoteNextCommitInfo
+                | ChannelState.Shutdown data -> Some data.RemoteNextCommitInfo
+                | ChannelState.Negotiating data -> Some data.RemoteNextCommitInfo
+                | ChannelState.Closing data -> Some data.RemoteNextCommitInfo
+            this.Commitments.SpendableBalance remoteNextCommitInfoOpt
+
+
 module Channel =
 
     let private hex = NBitcoin.DataEncoders.HexEncoder()
@@ -660,6 +672,32 @@ module Channel =
             [ BothFundingLocked(nextState) ] |> Ok
 
         // ---------- normal operation ---------
+        | ChannelState.Normal state, MonoHopUnidirectionalPayment op when state.LocalShutdown.IsSome || state.RemoteShutdown.IsSome ->
+            sprintf "Could not send mono-hop unidirectional payment %A since shutdown is already in progress." op
+            |> apiMisuse
+        | ChannelState.Normal state, MonoHopUnidirectionalPayment op ->
+            result {
+                let payment: MonoHopUnidirectionalPaymentMsg = {
+                    ChannelId = cs.Commitments.ChannelId()
+                    Amount = op.Amount
+                }
+                let commitments1 = cs.Commitments.AddLocalProposal(payment)
+
+                let remoteCommit1 =
+                    match state.RemoteNextCommitInfo with
+                    | RemoteNextCommitInfo.Waiting nextRemoteCommit -> nextRemoteCommit
+                    | RemoteNextCommitInfo.Revoked _info -> commitments1.RemoteCommit
+                let! reduced = remoteCommit1.Spec.Reduce(commitments1.RemoteChanges.ACKed, commitments1.LocalChanges.Proposed) |> expectTransactionError
+                do! Validation.checkOurMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec reduced commitments1 payment
+                return [ WeAcceptedOperationMonoHopUnidirectionalPayment(payment, commitments1) ]
+            }
+        | ChannelState.Normal _state, ApplyMonoHopUnidirectionalPayment msg ->
+            result {
+                let commitments1 = cs.Commitments.AddRemoteProposal(msg)
+                let! reduced = commitments1.LocalCommit.Spec.Reduce (commitments1.LocalChanges.ACKed, commitments1.RemoteChanges.Proposed) |> expectTransactionError
+                do! Validation.checkTheirMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec reduced commitments1 msg
+                return [ WeAcceptedMonoHopUnidirectionalPayment commitments1 ]
+            }
         | ChannelState.Normal state, AddHTLC op when state.LocalShutdown.IsSome || state.RemoteShutdown.IsSome ->
             sprintf "Could not add new HTLC %A since shutdown is already in progress." op
             |> apiMisuse
@@ -1100,7 +1138,11 @@ module Channel =
             }
 
         // ----- normal operation --------
+        | WeAcceptedOperationMonoHopUnidirectionalPayment(_, newCommitments), ChannelState.Normal _normalData ->
+            { c with Commitments = newCommitments }
         | WeAcceptedOperationAddHTLC(_, newCommitments), ChannelState.Normal _normalData ->
+            { c with Commitments = newCommitments }
+        | WeAcceptedMonoHopUnidirectionalPayment(newCommitments), ChannelState.Normal _normalData ->
             { c with Commitments = newCommitments }
         | WeAcceptedUpdateAddHTLC(newCommitments), ChannelState.Normal _normalData ->
             { c with Commitments = newCommitments }

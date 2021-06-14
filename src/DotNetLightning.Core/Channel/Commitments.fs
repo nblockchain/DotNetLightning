@@ -230,3 +230,41 @@ type Commitments = {
                      |> Money.Satoshis) - commitFee
 
             {Amounts.ToLocal = toLocalAmount; ToRemote = toRemoteAmount}
+
+        member this.SpendableBalance (remoteNextCommitInfoOpt: Option<RemoteNextCommitInfo>)
+                                         : LNMoney =
+            let remoteCommit =
+                match remoteNextCommitInfoOpt with
+                | Some (RemoteNextCommitInfo.Waiting nextRemoteCommit) -> nextRemoteCommit
+                | Some (RemoteNextCommitInfo.Revoked _info) -> this.RemoteCommit
+                | None -> this.RemoteCommit
+            let reducedRes =
+                remoteCommit.Spec.Reduce(
+                    this.RemoteChanges.ACKed,
+                    this.LocalChanges.Proposed
+                )
+            let reduced =
+                match reducedRes with
+                | Error err ->
+                    failwithf
+                        "reducing commit failed even though we have not proposed any changes\
+                        error: %A"
+                        err
+                | Ok reduced -> reduced
+            let fees =
+                if this.IsFunder then
+                    Transactions.commitTxFee this.RemoteParams.DustLimitSatoshis reduced
+                    |> LNMoney.FromMoney
+                else
+                    LNMoney.Zero
+            let channelReserve =
+                this.RemoteParams.ChannelReserveSatoshis
+                |> LNMoney.FromMoney
+            let totalBalance = reduced.ToRemote
+            let untrimmedSpendableBalance = totalBalance - channelReserve - fees
+            let dustLimit =
+                this.RemoteParams.DustLimitSatoshis
+                |> LNMoney.FromMoney
+            let untrimmedMax = LNMoney.Min(untrimmedSpendableBalance, dustLimit)
+            let spendableBalance = LNMoney.Max(untrimmedMax, untrimmedSpendableBalance)
+            spendableBalance
