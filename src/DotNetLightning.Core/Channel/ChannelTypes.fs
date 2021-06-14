@@ -283,13 +283,13 @@ type ChannelEvent =
     | WeAcceptedUpdateAddHTLC of newCommitments: Commitments
 
     | WeAcceptedOperationFulfillHTLC of msg: UpdateFulfillHTLCMsg * newCommitments: Commitments
-    | WeAcceptedFulfillHTLC of msg: UpdateFulfillHTLCMsg * origin: HTLCSource * htlc: UpdateAddHTLCMsg * newCommitments: Commitments
+    | WeAcceptedFulfillHTLC of msg: UpdateFulfillHTLCMsg * origin: Option<HTLCSource> * htlc: UpdateAddHTLCMsg * newCommitments: Commitments
 
     | WeAcceptedOperationFailHTLC of msg: UpdateFailHTLCMsg * newCommitments: Commitments
-    | WeAcceptedFailHTLC of origin: HTLCSource * msg: UpdateAddHTLCMsg * nextCommitments: Commitments
+    | WeAcceptedFailHTLC of origin: Option<HTLCSource> * msg: UpdateAddHTLCMsg * nextCommitments: Commitments
 
     | WeAcceptedOperationFailMalformedHTLC of msg: UpdateFailMalformedHTLCMsg * newCommitments: Commitments
-    | WeAcceptedFailMalformedHTLC of origin: HTLCSource * msg: UpdateAddHTLCMsg * newCommitments: Commitments
+    | WeAcceptedFailMalformedHTLC of origin: Option<HTLCSource> * msg: UpdateAddHTLCMsg * newCommitments: Commitments
 
     | WeAcceptedOperationUpdateFee of msg: UpdateFeeMsg  * nextCommitments: Commitments
     | WeAcceptedUpdateFee of msg: UpdateFeeMsg * newCommitments: Commitments

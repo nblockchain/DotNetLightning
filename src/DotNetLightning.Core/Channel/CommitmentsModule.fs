@@ -137,7 +137,7 @@ module internal Commitments =
         match cm.GetHTLCCrossSigned(Direction.Out, msg.HTLCId) with
         | Some htlc when htlc.PaymentHash = msg.PaymentPreimage.Hash ->
             let commitments = cm.AddRemoteProposal(msg)
-            let origin = cm.OriginChannels |> Map.find(msg.HTLCId)
+            let origin = cm.OriginChannels |> Map.tryFind(msg.HTLCId)
             [WeAcceptedFulfillHTLC(msg, origin, htlc, commitments)] |> Ok
         | Some htlc ->
             (htlc.PaymentHash, msg.PaymentPreimage)
@@ -178,7 +178,7 @@ module internal Commitments =
                     | false, _ ->
                         msg.HTLCId |> htlcOriginNotKnown
                 let nextC = cm.AddRemoteProposal(msg)
-                return [WeAcceptedFailHTLC(o, htlc, nextC)]
+                return [WeAcceptedFailHTLC(Some o, htlc, nextC)]
             }
         | None ->
             msg.HTLCId |> unknownHTLCId
@@ -216,7 +216,7 @@ module internal Commitments =
                         | false, _ ->
                             msg.HTLCId |> htlcOriginNotKnown
                     let nextC = cm.AddRemoteProposal(msg)
-                    return [WeAcceptedFailMalformedHTLC(o, htlc, nextC)]
+                    return [WeAcceptedFailMalformedHTLC(Some o, htlc, nextC)]
                 }
             | None ->
                 msg.HTLCId |> unknownHTLCId
