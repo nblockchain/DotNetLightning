@@ -272,7 +272,7 @@ module internal ChannelError =
     let inline unknownHTLCId x =
         x |> UnknownHTLCId |> Error
         
-    let inline htlcOriginNowKnown x =
+    let inline htlcOriginNotKnown x =
         x |> HTLCOriginNotKnown |> Error
     let inline invalidFailureCode x =
         x |> InvalidFailureCode |> Error
