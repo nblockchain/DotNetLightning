@@ -524,6 +524,7 @@ module Transactions =
                 let dest = Scripts.toLocalDelayed localRevocationPubKey toLocalDelay localDelayedPaymentPubKey
                 // we have already done dust limit check above
                 txb.DustPrevention <- false
+                txb.Extensions.Add (new HTLCOfferedExtensions())
                 let tx = txb.AddCoins(scriptCoin)
                             .Send(dest.WitHash, amount)
                             .SendFees(fee)
@@ -566,6 +567,7 @@ module Transactions =
                     ScriptCoin(coin, redeem)
                 let dest = Scripts.toLocalDelayed localRevocationPubKey toLocalDelay localDelayedPaymentPubKey
                 // we have already done dust limit check above
+                txb.Extensions.Add (new HTLCReceivedExtensions())
                 txb.DustPrevention <- false
                 let tx = txb.AddCoins(scriptCoin)
                             .Send(dest.WitHash, amount)

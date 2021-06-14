@@ -12,6 +12,7 @@ open DotNetLightning.Core.Utils.Extensions
 
 open ResultUtils
 open ResultUtils.Portability
+open System.ComponentModel
 
 [<AutoOpen>]
 module Primitives =
@@ -215,6 +216,33 @@ module Primitives =
                 member this.ToPubKey() =
                     this.ToPrivKey().PubKey
 
+    type PaymentSecret =
+        private PaymentSecret of uint256
+            with
+                // as per BOLT-2:
+                static member LENGTH = 32
+
+                static member Create(secret: uint256) =
+                    PaymentSecret secret
+
+                static member FromByteArray(secretBytes: array<byte>) =
+                    uint256(secretBytes, false)
+                    |> PaymentSecret
+
+                member this.Value =
+                    let (PaymentSecret v) = this in v
+
+                member this.ToHex() =
+                    let h = NBitcoin.DataEncoders.HexEncoder()
+                    let ba: byte[] = this.ToByteArray()
+                    ba |> h.EncodeData
+
+                member this.ToBytes() =
+                    this.Value.ToBytes(false)
+
+                member this.ToByteArray() =
+                    this.Value.ToBytes(false) |> Array.ofSeq
+
     let (|PaymentPreimage|) x =
         match x with
         | PaymentPreimage x -> x
@@ -368,11 +396,28 @@ module Primitives =
 #if !NoDUsAsStructs
     [<Struct>]
 #endif
+    [<TypeConverter(typeof<HTLCIdToStringTypeConverter>)>]
     type HTLCId = | HTLCId of uint64 with
         static member Zero = HTLCId(0UL)
         member x.Value = let (HTLCId v) = x in v
 
         static member (+) (a: HTLCId, b: uint64) = (a.Value + b) |> HTLCId
+
+        override self.ToString() =
+            self.Value.ToString()
+
+    and private HTLCIdToStringTypeConverter() =
+        inherit TypeConverter()
+        override __.CanConvertFrom(_context, sourceType) =
+            sourceType = typeof<string>
+        override __.ConvertFrom(_context, _culture, value) =
+            match value with
+            | :? string as stringValue ->
+                stringValue
+                |> UInt64.Parse
+                |> HTLCId.HTLCId
+                |> box
+            | _ -> failwith "should not happen"
 
 #if !NoDUsAsStructs
     [<Struct>]

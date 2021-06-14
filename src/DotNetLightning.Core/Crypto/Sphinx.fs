@@ -22,6 +22,9 @@ module Sphinx =
     let PayloadLength = 33
 
     [<Literal>]
+    let HopDataSize = 1300
+
+    [<Literal>]
     let MacLength = 32
 
     [<Literal>]
@@ -88,18 +91,35 @@ module Sphinx =
         computeEphemeralPublicKeysAndSharedSecretsCore
             (sessionKey) (pubKeys |> List.tail) ([ephemeralPK0]) ([blindingFactor0]) ([secret0])
 
-    let rec internal generateFiller (keyType: string) (sharedSecrets: Key list) (hopSize: int) (maxNumberOfHops: int option) =
-        let maxHopN = defaultArg maxNumberOfHops MaxHops
-        sharedSecrets
-        |> List.fold (fun (padding: byte[]) (secret: Key) ->
-            let key = generateKey(keyType, secret.ToBytes())
-            let padding1 = Array.append padding (zeros hopSize)
-            let stream =
-                let s = generateStream(key, hopSize * (maxHopN + 1))
-                s.[s.Length - padding1.Length .. s.Length - 1] // take padding1 from tale
-            assert (stream.Length = padding1.Length)
-            xor(padding1, stream)
-            ) [||]
+    let rec internal generateFiller (keyType: string) (payloads: byte[] list) (sharedSecrets: Key list) =
+        let filler_size = 
+            payloads.[1..] |>
+            List.sumBy (fun payload -> payload.Length + MacLength)
+
+        let rec fillInner (filler: array<byte>)
+                          (i: int)
+                              : array<byte> =
+            if i = payloads.Length - 1 then
+                filler
+            else
+                let filler_offset = 
+                    payloads.[..i-1] |>
+                    List.sumBy (fun payload -> payload.Length + MacLength)
+
+                
+                let filler_start = HopDataSize - filler_offset
+                let filler_end = HopDataSize + payloads.[i].Length  + MacLength
+                let filler_len = filler_end - filler_start
+
+                let key = generateKey(keyType, sharedSecrets.[i].ToBytes())
+                let stream =
+                    let s = generateStream(key, filler_end)
+                    s.[filler_start..filler_end-1]
+
+                let newFiller = [xor (Array.take filler_len filler, stream); Array.skip filler_len filler] |> Array.concat
+                fillInner newFiller (i + 1)
+
+        fillInner (Array.zeroCreate filler_size) 0
 
     type ParsedPacket = {
         Payload: byte[]
@@ -150,12 +170,10 @@ module Sphinx =
          sharedSecret: byte[],
          packet: OnionPacket,
          routingInfoFiller: byte[] option) =
-        if (payload.Length <> PayloadLength) then
-            failwithf "Payload length is not %A" PayloadLength
-        else
+            let payloadLen = payload.Length
             let filler = defaultArg routingInfoFiller ([||])
             let nextRoutingInfo =
-                let routingInfo1 = seq [ payload; packet.HMAC.ToBytes(); (packet.HopData |> Array.skipBack(PayloadLength + MacLength)) ]
+                let routingInfo1 = seq [ payload; packet.HMAC.ToBytes(); (packet.HopData |> Array.skipBack(payloadLen + MacLength)) ]
                                    |> Array.concat
                 let routingInfo2 =
                     let rho = generateKey("rho", sharedSecret)
@@ -174,6 +192,20 @@ module Sphinx =
                               HMAC = nextHmac }
             nextPacket
 
+    module PacketFiller =
+        // DeterministicPacketFiller is a packet filler that generates a deterministic
+        // set of filler bytes by using chacha20 with a key derived from the session
+        // key.
+        let DeterministicPacketFiller (sessionKey: Key) =
+            generateStream(generateKey("pad",sessionKey.ToBytes()), 1300)
+
+        // BlankPacketFiller is a packet filler that doesn't attempt to fill out the
+        // packet at all. It should ONLY be used for generating test vectors or other
+        // instances that required deterministic packet generation.
+        [<Obsolete("BlankPacketFiller is obsolete, see here: https://github.com/lightningnetwork/lightning-rfc/commit/8dd0b75809c9a7498bb9031a6674e5f58db509f4", false)>]
+        let BlankPacketFiller _=
+            Array.zeroCreate 1300
+
     type PacketAndSecrets = {
         Packet: OnionPacket
         /// Shared secrets (one per node in the route). Known (and needed) only if you're creating the
@@ -181,15 +213,15 @@ module Sphinx =
         SharedSecrets: (Key * PubKey) list
     }
         with
-            static member Create (sessionKey: Key, pubKeys: PubKey list, payloads: byte[] list, ad: byte[]) =
+            static member Create (sessionKey: Key, pubKeys: PubKey list, payloads: byte[] list, ad: byte[], initialPacketFiller: Key -> byte[]) =
                 let (ephemeralPubKeys, sharedSecrets) = computeEphemeralPublicKeysAndSharedSecrets (sessionKey) (pubKeys)
-                let filler = generateFiller "rho" sharedSecrets.[0..sharedSecrets.Length - 2] (PayloadLength + MacLength) (Some MaxHops)
+                let filler = generateFiller "rho" payloads sharedSecrets
 
                 let lastPacket = makeNextPacket(payloads |> List.last,
                                                 ad,
                                                 ephemeralPubKeys |> List.last,
                                                 (sharedSecrets |> List.last |> fun ss -> ss.ToBytes()),
-                                                OnionPacket.LastPacket,
+                                                {OnionPacket.LastPacket with HopData = initialPacketFiller(sessionKey)},
                                                 Some(filler))
                 let rec loop (hopPayloads: byte[] list, ephKeys: PubKey list, ss: Key list, packet: OnionPacket) =
                     if (hopPayloads.IsEmpty) then

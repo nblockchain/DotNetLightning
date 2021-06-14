@@ -31,7 +31,7 @@ type OnionRealm0HopData = {
 
 type OnionPayload =
     | Legacy of OnionRealm0HopData
-    | TLVPayload of tlvs: HopPayloadTLV array * hmac: uint256
+    | TLVPayload of tlvs: HopPayloadTLV array
     with
     static member FromBytes(bytes: byte[]) =
         match bytes.[0] with
@@ -46,14 +46,13 @@ type OnionPayload =
                 let! tlvs =
                     GenericTLV.TryCreateManyFromBytes(bytes.[0..(l - 1)])
                     |> Result.map (Array.map(HopPayloadTLV.FromGenericTLV))
-                let hmac = uint256(bytes.[l..(l + 31)], false)
-                return (tlvs, hmac) |> TLVPayload
+                return TLVPayload tlvs
             }
             
     member this.ToBytes() =
         match this with
         | Legacy o -> o.ToBytes()
-        | TLVPayload (tlvs, hmac) ->
+        | TLVPayload tlvs->
             let payloads = tlvs |> Seq.map(fun tlv -> tlv.ToGenericTLV().ToBytes()) |> Seq.concat |> Seq.toArray
             let length = payloads.LongLength.ToVarInt()
-            Array.concat [length; payloads; hmac.ToBytes(false)]
+            Array.concat [length; payloads]

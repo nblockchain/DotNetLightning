@@ -583,7 +583,7 @@ let gossipTimestampFilterGen: Gen<GossipTimestampFilterMsg> = gen {
 
 let private hopPayloadTlvGen =
     let paymentDataGen: Gen<_ * _> =
-        ((PaymentPreimage.Create <!> bytesOfNGen(32)), (lnMoneyGen))
+        ((PaymentSecret.Create <!> uint256Gen), (lnMoneyGen))
         ||> Gen.map2(fun a b -> (a, b))
     Gen.frequency
         [(1, AmountToForward <!> lnMoneyGen)
@@ -597,8 +597,7 @@ let private onionPayloadTlvGen =
 let tlvOnionPayloadGen =
     gen {
         let! tlv = Gen.nonEmptyListOf onionPayloadTlvGen |> Gen.map(List.toArray)
-        let! hmac = uint256Gen
-        return (tlv, hmac) |> OnionPayload.TLVPayload
+        return OnionPayload.TLVPayload tlv
     }
 let private legacyOnionPayloadGen =
     gen {
