@@ -137,6 +137,9 @@ type ChannelEvent =
     | BothFundingLocked of nextState: Data.NormalData * nextCommitments: Commitments
 
     // -------- normal operation ------
+    | WeAcceptedOperationMonoHopUnidirectionalPayment of msg: MonoHopUnidirectionalPaymentMsg * newCommitments: Commitments
+    | WeAcceptedMonoHopUnidirectionalPayment of newCommitments: Commitments
+
     | WeAcceptedOperationAddHTLC of msg: UpdateAddHTLCMsg * newCommitments: Commitments
     | WeAcceptedUpdateAddHTLC of newCommitments: Commitments
 
