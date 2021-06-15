@@ -572,6 +572,58 @@ and Channel = {
             return channel, msgToSend
     }
 
+    member self.MonoHopUnidirectionalPayment (amount: LNMoney)
+                                                 : Result<Channel * MonoHopUnidirectionalPaymentMsg, ChannelError> = result {
+        if self.NegotiatingState.HasEnteredShutdown() then
+            return!
+                sprintf
+                    "Could not send mono-hop unidirectional payment of amount %A since shutdown is already \
+                    in progress." amount
+                |> apiMisuse
+        else
+            let payment: MonoHopUnidirectionalPaymentMsg = {
+                ChannelId = self.SavedChannelState.StaticChannelConfig.ChannelId()
+                Amount = amount
+            }
+            let commitments1 = self.Commitments.AddLocalProposal(payment)
+
+            let! remoteNextCommitInfo =
+                self.RemoteNextCommitInfoIfFundingLockedNormal "MonoHopUniDirectionalPayment"
+            let remoteCommit1 =
+                match remoteNextCommitInfo with
+                | Waiting nextRemoteCommit -> nextRemoteCommit
+                | Revoked _info -> self.SavedChannelState.RemoteCommit
+            let! reduced = remoteCommit1.Spec.Reduce(self.SavedChannelState.RemoteChanges.ACKed, commitments1.ProposedLocalChanges) |> expectTransactionError
+            do!
+                Validation.checkOurMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec
+                    reduced
+                    self.SavedChannelState.StaticChannelConfig
+                    payment
+            let channel = {
+                self with
+                    Commitments = commitments1
+            }
+            return channel, payment
+    }
+
+    member self.ApplyMonoHopUnidirectionalPayment (msg: MonoHopUnidirectionalPaymentMsg)
+                                                      : Result<Channel, ChannelError> = result {
+        let commitments1 = self.Commitments.AddRemoteProposal(msg)
+        let! reduced =
+            self.SavedChannelState.LocalCommit.Spec.Reduce
+                (self.SavedChannelState.LocalChanges.ACKed, commitments1.ProposedRemoteChanges)
+            |> expectTransactionError
+        do!
+            Validation.checkTheirMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec
+                reduced
+                self.SavedChannelState.StaticChannelConfig
+                msg
+        return {
+            self with
+                Commitments = commitments1
+        }
+    }
+
     member self.AddHTLC (op: OperationAddHTLC)
                             : Result<Channel * UpdateAddHTLCMsg, ChannelError> = result {
         if self.NegotiatingState.HasEnteredShutdown() then
@@ -1106,6 +1158,45 @@ and Channel = {
     member self.RemoteHasChanges() =
         (not self.SavedChannelState.LocalChanges.ACKed.IsEmpty)
         || (not self.Commitments.ProposedRemoteChanges.IsEmpty)
+
+    member self.SpendableBalance (): LNMoney =
+        let remoteParams = self.SavedChannelState.StaticChannelConfig.RemoteParams
+        let remoteCommit =
+            match self.RemoteNextCommitInfo with
+            | Some (RemoteNextCommitInfo.Waiting nextRemoteCommit) -> nextRemoteCommit
+            | Some (RemoteNextCommitInfo.Revoked _info) -> self.SavedChannelState.RemoteCommit
+            // TODO: This could return a proper error, or report the full balance
+            | None -> failwith "funding is not locked"
+        let reducedRes =
+            remoteCommit.Spec.Reduce(
+                self.SavedChannelState.RemoteChanges.ACKed,
+                self.Commitments.ProposedLocalChanges
+            )
+        let reduced =
+            match reducedRes with
+            | Error err ->
+                failwithf
+                    "reducing commit failed even though we have not proposed any changes\
+                    error: %A"
+                    err
+            | Ok reduced -> reduced
+        let fees =
+            if self.SavedChannelState.StaticChannelConfig.IsFunder then
+                Transactions.commitTxFee remoteParams.DustLimitSatoshis reduced
+                |> LNMoney.FromMoney
+            else
+                LNMoney.Zero
+        let channelReserve =
+            remoteParams.ChannelReserveSatoshis
+            |> LNMoney.FromMoney
+        let totalBalance = reduced.ToRemote
+        let untrimmedSpendableBalance = totalBalance - channelReserve - fees
+        let dustLimit =
+            remoteParams.DustLimitSatoshis
+            |> LNMoney.FromMoney
+        let untrimmedMax = LNMoney.Min(untrimmedSpendableBalance, dustLimit)
+        let spendableBalance = LNMoney.Max(untrimmedMax, untrimmedSpendableBalance)
+        spendableBalance
 
     member private self.sendCommit (remoteNextCommitInfo: RemoteNextCommitInfo)
                                        : Result<CommitmentSignedMsg * Channel, ChannelError> =
