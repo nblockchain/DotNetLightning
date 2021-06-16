@@ -286,7 +286,11 @@ module KeyExtensions =
                                    : TransactionSignature * PSBT =
             let htlcPrivKey = perCommitmentPoint.DeriveHtlcPrivKey this.HtlcBasepointSecret
             let htlcPubKey = htlcPrivKey.HtlcPubKey()
-            psbt.Settings.CustomBuilderExtensions <- ([new HTLCReceivedExtensions() :> BuilderExtension; new HTLCOfferedExtensions():> BuilderExtension] |> Seq.ofList)
+            psbt.Settings.CustomBuilderExtensions <-
+                [
+                    HtlcReceivedExtensions() :> BuilderExtension
+                    HtlcOfferedExtensions() :> BuilderExtension
+                ] |> Seq.ofList
             psbt.SignWithKeys(htlcPrivKey.RawKey()) |> ignore
             match psbt.GetMatchingSig(htlcPubKey.RawPubKey()) with
             | Some signature -> (signature, psbt)

@@ -91,7 +91,7 @@ module Sphinx =
         computeEphemeralPublicKeysAndSharedSecretsCore
             (sessionKey) (pubKeys |> List.tail) ([ephemeralPK0]) ([blindingFactor0]) ([secret0])
 
-    let rec internal generateFiller (keyType: string) (payloads: byte[] list) (sharedSecrets: Key list) =
+    let rec internal generateFiller (keyType: string) (payloads: list<array<byte>>) (sharedSecrets: list<Key>) =
         let filler_size = 
             payloads.[1..] |>
             List.sumBy (fun payload -> payload.Length + MacLength)
@@ -106,7 +106,6 @@ module Sphinx =
                     payloads.[..i-1] |>
                     List.sumBy (fun payload -> payload.Length + MacLength)
 
-                
                 let filler_start = HopDataSize - filler_offset
                 let filler_end = HopDataSize + payloads.[i].Length  + MacLength
                 let filler_len = filler_end - filler_start
@@ -197,14 +196,14 @@ module Sphinx =
         // set of filler bytes by using chacha20 with a key derived from the session
         // key.
         let DeterministicPacketFiller (sessionKey: Key) =
-            generateStream(generateKey("pad",sessionKey.ToBytes()), 1300)
+            generateStream(generateKey("pad", sessionKey.ToBytes()), HopDataSize)
 
         // BlankPacketFiller is a packet filler that doesn't attempt to fill out the
         // packet at all. It should ONLY be used for generating test vectors or other
         // instances that required deterministic packet generation.
         [<Obsolete("BlankPacketFiller is obsolete, see here: https://github.com/lightningnetwork/lightning-rfc/commit/8dd0b75809c9a7498bb9031a6674e5f58db509f4", false)>]
         let BlankPacketFiller _=
-            Array.zeroCreate 1300
+            Array.zeroCreate HopDataSize
 
     type PacketAndSecrets = {
         Packet: OnionPacket
@@ -213,7 +212,7 @@ module Sphinx =
         SharedSecrets: (Key * PubKey) list
     }
         with
-            static member Create (sessionKey: Key, pubKeys: PubKey list, payloads: byte[] list, ad: byte[], initialPacketFiller: Key -> byte[]) =
+            static member Create (sessionKey: Key, pubKeys: list<PubKey>, payloads: list<array<byte>>, ad: array<byte>, initialPacketFiller: Key -> array<byte>) =
                 let (ephemeralPubKeys, sharedSecrets) = computeEphemeralPublicKeysAndSharedSecrets (sessionKey) (pubKeys)
                 let filler = generateFiller "rho" payloads sharedSecrets
 

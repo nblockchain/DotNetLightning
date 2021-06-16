@@ -9,12 +9,12 @@ open ResultUtils
 open ResultUtils.Portability
 open Newtonsoft.Json
 
-type HTLCReceivedParameters = {
+type HtlcReceivedParameters = {
     LocalHtlcPubKey: HtlcPubKey
     RemoteHtlcPubKey: HtlcPubKey
 }
     with
-    static member TryExtractParameters (scriptPubKey: Script): Option<HTLCReceivedParameters> =
+    static member TryExtractParameters (scriptPubKey: Script): Option<HtlcReceivedParameters> =
         let ops =
             scriptPubKey.ToOps()
             // we have to collect it into a list and convert back to a seq
@@ -23,7 +23,6 @@ type HTLCReceivedParameters = {
             |> List.ofSeq
             |> Seq.ofList
 
-        Console.WriteLine(JsonConvert.SerializeObject(ops))
         let checkOpCode(opcodeType: OpcodeType) = seqParser<Op> {
             let! op = SeqParser.next()
             if op.Code = opcodeType then
@@ -94,31 +93,33 @@ type HTLCReceivedParameters = {
         | Ok data -> Some data
         | Error _consumeAllError -> None
 
-type internal HTLCReceivedExtensions() =
+type internal HtlcReceivedExtensions() =
     inherit BuilderExtension()
         override self.CanGenerateScriptSig (scriptPubKey: Script): bool =
-            (HTLCReceivedParameters.TryExtractParameters scriptPubKey).IsSome
+            (HtlcReceivedParameters.TryExtractParameters scriptPubKey).IsSome
 
         override self.GenerateScriptSig(scriptPubKey: Script, keyRepo: IKeyRepository, signer: ISigner): Script =
             let parameters =
-                match (HTLCReceivedParameters.TryExtractParameters scriptPubKey) with
+                match (HtlcReceivedParameters.TryExtractParameters scriptPubKey) with
                 | Some parameters -> parameters
                 | None ->
                     failwith
                         "NBitcoin should not call this unless CanGenerateScriptSig returns true"
-            let pubKey = keyRepo.FindKey scriptPubKey
+            let pubKeyOpt =
+                keyRepo.FindKey scriptPubKey
+                |> Option.ofObj
             // FindKey will return null if it can't find a key for
             // scriptPubKey. If we can't find a valid key then this method
             // should return null, indicating to NBitcoin that the sigScript
             // could not be generated.
-            match pubKey with
-            | null -> null
-            | _ when pubKey = parameters.LocalHtlcPubKey.RawPubKey() ->
+            match pubKeyOpt with
+            | None -> null
+            | Some pubKey when pubKey = parameters.LocalHtlcPubKey.RawPubKey() ->
                 let localHtlcSig = signer.Sign (parameters.LocalHtlcPubKey.RawPubKey())
                 Script [
                     Op.GetPushOp (localHtlcSig.ToBytes())
                 ]
-            | _ when pubKey = parameters.RemoteHtlcPubKey.RawPubKey() ->
+            | Some pubKey when pubKey = parameters.RemoteHtlcPubKey.RawPubKey() ->
                 let remoteHtlcSig = signer.Sign (parameters.RemoteHtlcPubKey.RawPubKey())
                 Script [
                     Op.GetPushOp (remoteHtlcSig.ToBytes())
@@ -144,7 +145,7 @@ type internal HTLCReceivedExtensions() =
             raise <| NotSupportedException()
 
         override self.IsCompatibleKey(pubKey: PubKey, scriptPubKey: Script): bool =
-            match HTLCReceivedParameters.TryExtractParameters scriptPubKey with
+            match HtlcReceivedParameters.TryExtractParameters scriptPubKey with
             | None -> false
             | Some parameters ->
                 parameters.LocalHtlcPubKey.RawPubKey() = pubKey

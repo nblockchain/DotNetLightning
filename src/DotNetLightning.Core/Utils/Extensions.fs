@@ -60,21 +60,21 @@ type System.UInt64 with
             buf
         
     member private x.GetLeadingZerosCount() =
-        if (x = 0UL) then
+        if x = 0UL then
             8
-        else if (x &&& 0xffffffffffffff00UL = 0UL) then
+        elif x &&& 0xffffffffffffff00UL = 0UL then
             7
-        else if (x &&& 0xffffffffffff0000UL = 0UL) then
+        elif x &&& 0xffffffffffff0000UL = 0UL then
             6
-        else if (x &&& 0xffffffffff000000UL = 0UL) then
+        elif x &&& 0xffffffffff000000UL = 0UL then
             5
-        else if (x &&& 0xffffffff00000000UL = 0UL) then
+        elif x &&& 0xffffffff00000000UL = 0UL then
             4
-        else if (x &&& 0xffffff0000000000UL = 0UL) then
+        elif x &&& 0xffffff0000000000UL = 0UL then
             3
-        else if (x &&& 0xffff000000000000UL = 0UL) then
+        elif x &&& 0xffff000000000000UL = 0UL then
             2
-        else if (x &&& 0xff00000000000000UL = 0UL) then
+        elif x &&& 0xff00000000000000UL = 0UL then
             1
         else
             0
@@ -82,7 +82,7 @@ type System.UInt64 with
     member x.GetTruncatedBytes() =
         let numZeros =
             x.GetLeadingZerosCount()
-        x.GetBytesBigEndian() |> Array.skip(numZeros)
+        x.GetBytesBigEndian() |> Array.skip numZeros
 
     //TODO: better error handling?
     static member FromTruncatedBytes(bytes: array<byte>): uint64 =
@@ -114,13 +114,13 @@ type System.UInt32 with
         BitConverter.ToUInt32(bytes, 0)
 
     member private x.GetLeadingZerosCount() =
-        if (x = 0u) then
+        if x = 0u then
             4
-        else if (x &&& 0xffffff00u = 0u) then
+        elif x &&& 0xffffff00u = 0u then
             3
-        else if (x &&& 0xffff0000u = 0u) then
+        elif x &&& 0xffff0000u = 0u then
             2
-        else if (x &&& 0xff000000u = 0u) then
+        elif x &&& 0xff000000u = 0u then
             1
         else
             0
@@ -128,7 +128,7 @@ type System.UInt32 with
     member x.GetTruncatedBytes() =
         let numZeros =
             x.GetLeadingZerosCount()
-        x.GetBytesBigEndian() |> Array.skip(numZeros)
+        x.GetBytesBigEndian() |> Array.skip numZeros
 
     //TODO: better error handling?
     static member FromTruncatedBytes(bytes: array<byte>): uint32 =

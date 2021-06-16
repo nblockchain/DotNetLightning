@@ -137,7 +137,7 @@ module internal Commitments =
         match cm.GetHTLCCrossSigned(Direction.Out, msg.HTLCId) with
         | Some htlc when htlc.PaymentHash = msg.PaymentPreimage.Hash ->
             let commitments = cm.AddRemoteProposal(msg)
-            let origin = cm.OriginChannels |> Map.tryFind(msg.HTLCId)
+            let origin = cm.OriginChannels |> Map.tryFind msg.HTLCId
             [WeAcceptedFulfillHTLC(msg, origin, htlc, commitments)] |> Ok
         | Some htlc ->
             (htlc.PaymentHash, msg.PaymentPreimage)
@@ -345,10 +345,10 @@ module internal Commitments =
                     Transactions.checkTxFinalized signedCommitTx localCommitTx.WhichInput sigPair
                     |> expectTransactionError
                 let! finalizedCommitTx = tmp
-                let sortedHTLCTXs = Helpers.sortBothHTLCs htlcTimeoutTxs htlcSuccessTxs 
+                let sortedHTLCTXs = Helpers.sortBothHTLCs htlcTimeoutTxs htlcSuccessTxs
                 do! checkSignatureCountMismatch sortedHTLCTXs msg
                 
-                let HTLCTxsAndSignatures =
+                let htlcTxsAndSignatures =
                     sortedHTLCTXs 
                     |> List.zip (msg.HTLCSignatures)
                     |> List.map(fun (remoteSig, htlc) ->
@@ -371,7 +371,7 @@ module internal Commitments =
                     | _ -> failwith "Unreachable!"
 
                 let! txList =
-                    HTLCTxsAndSignatures
+                    htlcTxsAndSignatures
                     |> List.map(checkHTLCSig)
                     |> List.sequenceResultA
                     |> expectTransactionErrors

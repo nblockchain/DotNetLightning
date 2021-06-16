@@ -108,18 +108,18 @@ type HopPayloadTLV =
     static member FromGenericTLV(tlv: GenericTLV) =
         match tlv.Type with
         | 2UL ->
-            UInt64.FromTruncatedBytes(tlv.Value)
+            UInt64.FromTruncatedBytes tlv.Value
             |> LNMoney.MilliSatoshis
             |> AmountToForward
         | 4UL ->
-            UInt32.FromTruncatedBytes(tlv.Value)
+            UInt32.FromTruncatedBytes tlv.Value
             |> OutgoingCLTV
         | 6UL ->
-            ShortChannelId.From8Bytes(tlv.Value)
+            ShortChannelId.From8Bytes tlv.Value
             |> ShortChannelId
         | 8UL ->
             let secret = tlv.Value.[0..PaymentSecret.LENGTH - 1] |> PaymentSecret.FromByteArray
-            let totalMSat = UInt64.FromTruncatedBytes(tlv.Value.[PaymentSecret.LENGTH..]) |> LNMoney.MilliSatoshis
+            let totalMSat = UInt64.FromTruncatedBytes tlv.Value.[PaymentSecret.LENGTH..] |> LNMoney.MilliSatoshis
             (secret, totalMSat) |> PaymentData
         | _ -> Unknown tlv
         
