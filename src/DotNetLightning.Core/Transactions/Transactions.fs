@@ -498,6 +498,13 @@ module Transactions =
             | Error e -> failwithf "%A" e
 
     let sign(tx, key) = signCore(tx, key, true)
+    let signHtlcTx (htlc: IHTLCTx) (channelPrivKeys: ChannelPrivKeys) (perCommitmentPoint: PerCommitmentPoint) =
+        let htlcPrivKey =
+            perCommitmentPoint.DeriveHtlcPrivKey
+                channelPrivKeys.HtlcBasepointSecret
+
+        sign(htlc, htlcPrivKey.RawKey())
+
     let makeHTLCTimeoutTx (commitTx: Transaction)
                           (localDustLimit: Money)
                           (localRevocationPubKey: RevocationPubKey)
@@ -524,7 +531,6 @@ module Transactions =
                 let dest = Scripts.toLocalDelayed localRevocationPubKey toLocalDelay localDelayedPaymentPubKey
                 // we have already done dust limit check above
                 txb.DustPrevention <- false
-                txb.Extensions.Add (HtlcOfferedExtensions())
                 let tx = txb.AddCoins(scriptCoin)
                             .Send(dest.WitHash, amount)
                             .SendFees(fee)
@@ -567,7 +573,6 @@ module Transactions =
                     ScriptCoin(coin, redeem)
                 let dest = Scripts.toLocalDelayed localRevocationPubKey toLocalDelay localDelayedPaymentPubKey
                 // we have already done dust limit check above
-                txb.Extensions.Add (HtlcReceivedExtensions())
                 txb.DustPrevention <- false
                 let tx = txb.AddCoins(scriptCoin)
                             .Send(dest.WitHash, amount)

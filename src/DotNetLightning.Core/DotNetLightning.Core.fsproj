@@ -46,8 +46,6 @@
     <Compile Include="Utils/Errors.fs" />
     <Compile Include="Utils/RouteType.fs" />
     <Compile Include="Utils/PriorityQueue.fs" />
-    <Compile Include="Utils/HtlcReceivedExtensions.fs" />
-    <Compile Include="Utils/HtlcOfferedExtensions.fs" />
     <Compile Include="Chain/ChainInterface.fs" />
     <Compile Include="Chain/KeysInterface.fs" />
     <Compile Include="Serialization\GenericTLV.fs" />

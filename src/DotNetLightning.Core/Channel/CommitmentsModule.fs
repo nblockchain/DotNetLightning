@@ -287,7 +287,7 @@ module internal Commitments =
                 let htlcSigs =
                     sortedHTLCTXs
                     |> List.map(
-                            (fun htlc -> channelPrivKeys.SignHtlcTx htlc.Value remoteNextPerCommitmentPoint)
+                            (fun htlc -> (signHtlcTx htlc channelPrivKeys remoteNextPerCommitmentPoint))
                             >> fst
                             >> (fun txSig -> txSig.Signature)
                             )
@@ -352,7 +352,7 @@ module internal Commitments =
                     sortedHTLCTXs 
                     |> List.zip (msg.HTLCSignatures)
                     |> List.map(fun (remoteSig, htlc) ->
-                        channelPrivKeys.SignHtlcTx htlc.Value localPerCommitmentPoint |> fst, htlc, remoteSig
+                        signHtlcTx htlc channelPrivKeys localPerCommitmentPoint |> fst, htlc, remoteSig
                     )
 
                 let remoteHTLCPubKey = localPerCommitmentPoint.DeriveHtlcPubKey remoteChannelKeys.HtlcBasepoint
