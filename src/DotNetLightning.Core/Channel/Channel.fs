@@ -6,6 +6,7 @@ open DotNetLightning.Utils.Aether
 open DotNetLightning.Chain
 open DotNetLightning.Crypto
 open DotNetLightning.Transactions
+open DotNetLightning.Transactions.Transactions
 open DotNetLightning.Serialization
 open DotNetLightning.Serialization.Msgs
 open NBitcoin
@@ -1245,7 +1246,7 @@ and Channel = {
                 let htlcSigs =
                     sortedHTLCTXs
                     |> List.map(
-                            (fun htlc -> channelPrivKeys.SignHtlcTx htlc.Value remoteNextPerCommitmentPoint)
+                            (fun htlc -> signHtlcTx htlc channelPrivKeys remoteNextPerCommitmentPoint)
                             >> fst
                             >> (fun txSig -> txSig.Signature)
                             )
@@ -1326,29 +1327,30 @@ and Channel = {
                 let sortedHTLCTXs = Commitments.Helpers.sortBothHTLCs htlcTimeoutTxs htlcSuccessTxs
                 do! Commitments.checkSignatureCountMismatch sortedHTLCTXs msg
                 
-                let _localHTLCSigs, sortedHTLCTXs =
-                    let localHtlcSigsAndHTLCTxs =
-                        sortedHTLCTXs |> List.map(fun htlc ->
-                            channelPrivKeys.SignHtlcTx htlc.Value localPerCommitmentPoint
-                        )
-                    localHtlcSigsAndHTLCTxs |> List.map(fst), localHtlcSigsAndHTLCTxs |> List.map(snd) |> Seq.cast<IHTLCTx> |> List.ofSeq
+                let htlcTxsAndSignatures =
+                    sortedHTLCTXs 
+                    |> List.zip (msg.HTLCSignatures)
+                    |> List.map(fun (remoteSig, htlc) ->
+                         htlc, signHtlcTx htlc channelPrivKeys localPerCommitmentPoint |> fst, remoteSig
+                    )
 
                 let remoteHTLCPubKey = localPerCommitmentPoint.DeriveHtlcPubKey remoteChannelKeys.HtlcBasepoint
 
-                let checkHTLCSig (htlc: IHTLCTx, remoteECDSASig: LNECDSASignature): Result<_, _> =
-                    let remoteS = TransactionSignature(remoteECDSASig.Value, SigHash.All)
+                let checkHTLCSig (htlc: IHTLCTx, localSignature: TransactionSignature, remoteECDSASig: LNECDSASignature): Result<_, _> =
+                    let remoteSignature = TransactionSignature(remoteECDSASig.Value, SigHash.All)
                     match htlc with
                     | :? HTLCTimeoutTx ->
-                        (Transactions.checkTxFinalized (htlc.Value) (0) (seq [(remoteHTLCPubKey.RawPubKey(), remoteS)]))
+                        (Transactions.checkTxFinalized (htlc.Value) (0) (seq [(remoteHTLCPubKey.RawPubKey(), remoteSignature)]))
                         |> Result.map(box)
                     // we cannot check that htlc-success tx are spendable because we need the payment preimage; thus we only check the remote sig
                     | :? HTLCSuccessTx ->
-                        (Transactions.checkSigAndAdd (htlc) (remoteS) (remoteHTLCPubKey.RawPubKey()))
+                        (htlc :?> HTLCTimeoutTx).Finalize(localSignature, remoteSignature)
+                        |> Result.map(FinalizedTx)
                         |> Result.map(box)
                     | _ -> failwith "Unreachable!"
 
                 let! txList =
-                    List.zip sortedHTLCTXs msg.HTLCSignatures
+                    htlcTxsAndSignatures
                     |> List.map(checkHTLCSig)
                     |> List.sequenceResultA
                     |> expectTransactionErrors
