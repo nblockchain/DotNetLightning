@@ -519,6 +519,13 @@ module Transactions =
             | Error e -> failwithf "%A" e
 
     let sign(tx, key) = signCore(tx, key, true)
+    let signHtlcTx (htlc: IHTLCTx) (channelPrivKeys: ChannelPrivKeys) (perCommitmentPoint: PerCommitmentPoint) =
+        let htlcPrivKey =
+            perCommitmentPoint.DeriveHtlcPrivKey
+                channelPrivKeys.HtlcBasepointSecret
+
+        sign(htlc, htlcPrivKey.RawKey())
+
     let makeHTLCTimeoutTx (commitTx: Transaction)
                           (localDustLimit: Money)
                           (localRevocationPubKey: RevocationPubKey)
