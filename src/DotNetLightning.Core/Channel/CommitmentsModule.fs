@@ -345,23 +345,24 @@ module internal Commitments =
                     Transactions.checkTxFinalized signedCommitTx localCommitTx.WhichInput sigPair
                     |> expectTransactionError
                 let! finalizedCommitTx = tmp
-                let sortedHTLCTXs = Helpers.sortBothHTLCs htlcTimeoutTxs htlcSuccessTxs
+                let sortedHTLCTXs = Helpers.sortBothHTLCs htlcTimeoutTxs htlcSuccessTxs 
                 do! checkSignatureCountMismatch sortedHTLCTXs msg
                 
-                let _localHTLCSigs, sortedHTLCTXs =
-                    let localHtlcSigsAndHTLCTxs =
-                        sortedHTLCTXs |> List.map(fun htlc ->
-                            channelPrivKeys.SignHtlcTx htlc.Value localPerCommitmentPoint
-                        )
-                    localHtlcSigsAndHTLCTxs |> List.map(fst), localHtlcSigsAndHTLCTxs |> List.map(snd) |> Seq.cast<IHTLCTx> |> List.ofSeq
+                let HTLCTxsAndSignatures =
+                    sortedHTLCTXs 
+                    |> List.zip (msg.HTLCSignatures)
+                    |> List.map(fun (remoteSig, htlc) ->
+                        channelPrivKeys.SignHtlcTx htlc.Value localPerCommitmentPoint |> fst, htlc, remoteSig
+                    )
 
                 let remoteHTLCPubKey = localPerCommitmentPoint.DeriveHtlcPubKey remoteChannelKeys.HtlcBasepoint
 
-                let checkHTLCSig (htlc: IHTLCTx, remoteECDSASig: LNECDSASignature): Result<_, _> =
+                let checkHTLCSig (localSignature: TransactionSignature, htlc: IHTLCTx, remoteECDSASig: LNECDSASignature): Result<_, _> =
                     let remoteS = TransactionSignature(remoteECDSASig.Value, SigHash.All)
                     match htlc with
                     | :? HTLCTimeoutTx ->
-                        (Transactions.checkTxFinalized (htlc.Value) (0) (seq [(remoteHTLCPubKey.RawPubKey(), remoteS)]))
+                        (htlc :?> HTLCTimeoutTx).Finalize(localSignature, remoteS)
+                        |> Result.map(FinalizedTx)
                         |> Result.map(box)
                     // we cannot check that htlc-success tx are spendable because we need the payment preimage; thus we only check the remote sig
                     | :? HTLCSuccessTx ->
@@ -370,7 +371,7 @@ module internal Commitments =
                     | _ -> failwith "Unreachable!"
 
                 let! txList =
-                    List.zip sortedHTLCTXs msg.HTLCSignatures
+                    HTLCTxsAndSignatures
                     |> List.map(checkHTLCSig)
                     |> List.sequenceResultA
                     |> expectTransactionErrors

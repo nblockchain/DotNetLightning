@@ -9,6 +9,7 @@ open DotNetLightning.Core.Utils.Extensions
 
 open ResultUtils
 open ResultUtils.Portability
+open NBitcoin.BuilderExtensions
 
 [<AutoOpen>]
 module NBitcoinArithmethicExtensions =
@@ -285,6 +286,7 @@ module KeyExtensions =
                                    : TransactionSignature * PSBT =
             let htlcPrivKey = perCommitmentPoint.DeriveHtlcPrivKey this.HtlcBasepointSecret
             let htlcPubKey = htlcPrivKey.HtlcPubKey()
+            psbt.Settings.CustomBuilderExtensions <- ([new HTLCReceivedExtensions() :> BuilderExtension; new HTLCOfferedExtensions():> BuilderExtension] |> Seq.ofList)
             psbt.SignWithKeys(htlcPrivKey.RawKey()) |> ignore
             match psbt.GetMatchingSig(htlcPubKey.RawPubKey()) with
             | Some signature -> (signature, psbt)
