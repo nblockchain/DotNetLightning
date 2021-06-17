@@ -1174,9 +1174,7 @@ and Channel = {
         let remoteCommit =
             match remoteNextCommitInfo with
             | Some (RemoteNextCommitInfo.Waiting nextRemoteCommit) -> nextRemoteCommit
-            | Some (RemoteNextCommitInfo.Revoked _info) -> savedChannelState.RemoteCommit
-            // TODO: This could return a proper error, or report the full balance
-            | None -> failwith "funding is not locked"
+            | _ -> savedChannelState.RemoteCommit
         let reducedRes =
             remoteCommit.Spec.Reduce(
                 savedChannelState.RemoteChanges.ACKed,
