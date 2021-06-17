@@ -54,6 +54,8 @@ type ChannelError =
     | CannotCloseChannel of msg: string
     | RemoteProposedHigherFeeThanBaseFee of baseFee: Money * proposedFee: Money
     | RemoteProposedFeeOutOfNegotiatedRange of ourPreviousFee: Money * theirPreviousFee: Money * theirNextFee: Money
+    | NoUpdatesToSign
+    | CannotSignCommitmentBeforeRevocation
     // ---- invalid command ----
     | InvalidOperationAddHTLC of InvalidOperationAddHTLCError
     // -------------------------
@@ -87,6 +89,8 @@ type ChannelError =
         | FundingTxNotGiven _ -> Ignore
         | OnceConfirmedFundingTxHasBecomeUnconfirmed _ -> Close
         | CannotCloseChannel _ -> Ignore
+        | NoUpdatesToSign -> Ignore
+        | CannotSignCommitmentBeforeRevocation -> Ignore
         | InvalidOperationAddHTLC _ -> Ignore
         | RemoteProposedHigherFeeThanBaseFee(_, _) -> Close
         | RemoteProposedFeeOutOfNegotiatedRange(_, _, _) -> Close
@@ -163,6 +167,10 @@ type ChannelError =
             sprintf "Funding tx not given: %s" msg
         | CannotCloseChannel msg ->
             sprintf "Cannot close channel: %s" msg
+        | NoUpdatesToSign ->
+            "No updates to sign"
+        | CannotSignCommitmentBeforeRevocation ->
+            "Cannot sign commitment before previous commitment is revoked"
         | InvalidOperationAddHTLC invalidOperationAddHTLCError ->
             sprintf "Invalid operation (add htlc): %s" invalidOperationAddHTLCError.Message
 
