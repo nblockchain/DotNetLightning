@@ -6,7 +6,7 @@ open NBitcoin.Crypto
 open System
 open System.Net
 open System.Linq
-
+open System.ComponentModel
 open System.Diagnostics
 open DotNetLightning.Core.Utils.Extensions
 
@@ -395,11 +395,28 @@ module Primitives =
 #if !NoDUsAsStructs
     [<Struct>]
 #endif
+    [<TypeConverter(typeof<HTLCIdToStringTypeConverter>)>]
     type HTLCId = | HTLCId of uint64 with
         static member Zero = HTLCId(0UL)
         member this.Value = let (HTLCId v) = this in v
 
         static member (+) (a: HTLCId, b: uint64) = (a.Value + b) |> HTLCId
+
+        override self.ToString() =
+            self.Value.ToString()
+
+    and private HTLCIdToStringTypeConverter() =
+        inherit TypeConverter()
+        override __.CanConvertFrom(_context, sourceType) =
+            sourceType = typeof<string>
+        override __.ConvertFrom(_context, _culture, value) =
+            match value with
+            | :? string as stringValue ->
+                stringValue
+                |> UInt64.Parse
+                |> HTLCId.HTLCId
+                |> box
+            | _ -> failwith "CanConvertFrom should not return true for any other types except string so this never happens"
 
 #if !NoDUsAsStructs
     [<Struct>]
