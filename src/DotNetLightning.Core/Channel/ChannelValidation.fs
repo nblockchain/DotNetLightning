@@ -214,6 +214,23 @@ module internal Validation =
         *> AcceptChannelMsgValidation.checkConfigPermits channelHandshakeLimits acceptChannelMsg
         |> Result.mapError(InvalidAcceptChannelError.Create acceptChannelMsg >> InvalidAcceptChannel)
 
+    let checkOurMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec (currentSpec)
+                                                                        (staticChannelConfig: StaticChannelConfig)
+                                                                        (payment: MonoHopUnidirectionalPaymentMsg) =
+        MonoHopUnidirectionalPaymentValidationWithContext.checkWeHaveSufficientFunds
+            staticChannelConfig
+            currentSpec
+        |> Validation.ofResult
+        |> Result.mapError(fun errs -> InvalidMonoHopUnidirectionalPayment { NetworkMsg = payment; Errors = errs })
+
+    let checkTheirMonoHopUnidirectionalPaymentIsAcceptableWithCurrentSpec (currentSpec)
+                                                                            (staticChannelConfig: StaticChannelConfig)
+                                                                            (payment: MonoHopUnidirectionalPaymentMsg) =
+        MonoHopUnidirectionalPaymentValidationWithContext.checkWeHaveSufficientFunds
+            staticChannelConfig
+            currentSpec
+        |> Validation.ofResult
+        |> Result.mapError(fun errs -> InvalidMonoHopUnidirectionalPayment { NetworkMsg = payment; Errors = errs })
 
     let checkOperationAddHTLC (remoteParams: RemoteParams) (op: OperationAddHTLC) =
         Validation.ofResult(UpdateAddHTLCValidation.checkExpiryIsNotPast op.CurrentHeight op.Expiry)
