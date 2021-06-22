@@ -1176,18 +1176,22 @@ and Channel = {
         (not this.SavedChannelState.LocalChanges.ACKed.IsEmpty)
         || (not this.Commitments.ProposedRemoteChanges.IsEmpty)
 
-    member this.SpendableBalance (): LNMoney =
-        let remoteParams = this.SavedChannelState.StaticChannelConfig.RemoteParams
+    // FIXME: This is a temporary hack to make the geewallet updates easier.
+    static member SpendableBalanceFromParts (savedChannelState: SavedChannelState)
+                                            (remoteNextCommitInfo: Option<RemoteNextCommitInfo>)
+                                            (commitments: Commitments)
+                                                : LNMoney =
+        let remoteParams = savedChannelState.StaticChannelConfig.RemoteParams
         let remoteCommit =
-            match this.RemoteNextCommitInfo with
+            match remoteNextCommitInfo with
             | Some (RemoteNextCommitInfo.Waiting nextRemoteCommit) -> nextRemoteCommit
-            | Some (RemoteNextCommitInfo.Revoked _info) -> this.SavedChannelState.RemoteCommit
+            | Some (RemoteNextCommitInfo.Revoked _info) -> savedChannelState.RemoteCommit
             // TODO: This could return a proper error, or report the full balance
             | None -> failwith "funding is not locked"
         let reducedRes =
             remoteCommit.Spec.Reduce(
-                this.SavedChannelState.RemoteChanges.ACKed,
-                this.Commitments.ProposedLocalChanges
+                savedChannelState.RemoteChanges.ACKed,
+                commitments.ProposedLocalChanges
             )
         let reduced =
             match reducedRes with
@@ -1198,7 +1202,7 @@ and Channel = {
                     err
             | Ok reduced -> reduced
         let fees =
-            if this.SavedChannelState.StaticChannelConfig.IsFunder then
+            if savedChannelState.StaticChannelConfig.IsFunder then
                 Transactions.commitTxFee remoteParams.DustLimitSatoshis reduced
                 |> LNMoney.FromMoney
             else
@@ -1214,6 +1218,12 @@ and Channel = {
         let untrimmedMax = LNMoney.Min(untrimmedSpendableBalance, dustLimit)
         let spendableBalance = LNMoney.Max(untrimmedMax, untrimmedSpendableBalance)
         spendableBalance
+
+    member this.SpendableBalance (): LNMoney =
+        Channel.SpendableBalanceFromParts
+            this.SavedChannelState
+            this.RemoteNextCommitInfo
+            this.Commitments
 
     member private this.sendCommit (remoteNextCommitInfo: RemoteNextCommitInfo)
                                        : Result<CommitmentSignedMsg * Channel, ChannelError> =
