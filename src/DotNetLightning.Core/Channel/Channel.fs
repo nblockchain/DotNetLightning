@@ -176,7 +176,7 @@ module Channel =
                 ShutdownScriptPubKey = cs.Config.ChannelOptions.ShutdownScriptPubKey
             }
             result {
-                do! Validation.checkOurOpenChannelMsgAcceptable (cs.Config) openChannelMsgToSend
+                do! Validation.checkOurOpenChannelMsgAcceptable (cs.Config) openChannelMsgToSend inputInitFunder.LocalParams
                 return [
                     NewOutboundChannelStarted(
                         openChannelMsgToSend, {
@@ -290,8 +290,8 @@ module Channel =
             makeChannelReestablish cs.ChannelPrivKeys state
         | WaitForOpenChannel state, ApplyOpenChannel msg ->
             result {
-                do! Validation.checkOpenChannelMsgAcceptable (cs.FeeEstimator) (cs.Config) msg
                 let localParams = state.InitFundee.LocalParams
+                do! Validation.checkOpenChannelMsgAcceptable (cs.FeeEstimator) (cs.Config) msg localParams
                 let channelKeys = state.InitFundee.ChannelPrivKeys
                 let localCommitmentPubKey = channelKeys.CommitmentSeed.DerivePerCommitmentPoint CommitmentNumber.FirstCommitment
                 let acceptChannelMsg: AcceptChannelMsg = {

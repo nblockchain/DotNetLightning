@@ -161,8 +161,8 @@ module internal ChannelHelpers =
 module internal Validation =
 
     open DotNetLightning.Channel
-    let checkOurOpenChannelMsgAcceptable (_conf: ChannelConfig) (msg: OpenChannelMsg) =
-        Validation.ofResult(OpenChannelMsgValidation.checkFundingSatoshisLessThanMax msg)
+    let checkOurOpenChannelMsgAcceptable (_conf: ChannelConfig) (msg: OpenChannelMsg) (localParams: LocalParams) =
+        Validation.ofResult(OpenChannelMsgValidation.checkFundingSatoshisLessThanMax msg localParams true)
         *^> OpenChannelMsgValidation.checkChannelReserveSatohisLessThanFundingSatoshis msg
         *^> OpenChannelMsgValidation.checkPushMSatLesserThanFundingValue msg
         *^> OpenChannelMsgValidation.checkFundingSatoshisLessThanDustLimitSatoshis msg
@@ -170,9 +170,9 @@ module internal Validation =
         *^> OpenChannelMsgValidation.checkFunderCanAffordFee (msg.FeeRatePerKw) msg
         |> Result.mapError((@)["open_channel msg is invalid"] >> InvalidOpenChannelError.Create msg >> InvalidOpenChannel)
 
-    let internal checkOpenChannelMsgAcceptable (feeEstimator: IFeeEstimator) (conf: ChannelConfig) (msg: OpenChannelMsg) =
+    let internal checkOpenChannelMsgAcceptable (feeEstimator: IFeeEstimator) (conf: ChannelConfig) (msg: OpenChannelMsg) (localParams: LocalParams) =
         let feeRate = feeEstimator.GetEstSatPer1000Weight(ConfirmationTarget.Background)
-        Validation.ofResult(OpenChannelMsgValidation.checkFundingSatoshisLessThanMax msg)
+        Validation.ofResult(OpenChannelMsgValidation.checkFundingSatoshisLessThanMax msg localParams false)
         *^> OpenChannelMsgValidation.checkChannelReserveSatohisLessThanFundingSatoshis msg
         *^> OpenChannelMsgValidation.checkPushMSatLesserThanFundingValue msg
         *^> OpenChannelMsgValidation.checkFundingSatoshisLessThanDustLimitSatoshis msg
